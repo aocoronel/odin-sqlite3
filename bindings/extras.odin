@@ -90,21 +90,25 @@ execute_dynamic :: proc(
 }
 
 /*
-This procedure does perform allocations. The max amount of appended rows
-is set by 'n', leave -1 for unlimited.
+This procedure does perform allocations. The max amount of appended rows is set by 'n',
+leave -1 for unlimited.
 
 For this procedure, it's recommended that the allocator is an arena.
 
 Example:
 
-rows, status := execute(db, context.allocator, "insert into tags (tag) values (?) returning *", "mytag")
+rows, status := execute(
+  db, context.allocator,
+  "insert into tags (tag) values (?) returning *",
+  "mytag"
+)
 defer {
 	for row in rows {
 		delete(row)
 	}
 	delete(rows)
 }
-if status != .Done { log.error(errmsg(status)) }
+if status != .Done { log.error(errmsg(db)) }
 */
 execute_query_dynamic :: proc(
 	db: ^SQLite3,
@@ -192,7 +196,7 @@ Example:
 
 rows, status := execute(db, context.allocator, struct { id: i64, tag: string }, "insert into tags (tag) values (?) returning *", "mytag")
 defer delete(rows)
-if status != .Done { log.error(errmsg(status)) }
+if status != .Done { log.error(errmsg(db)) }
 */
 execute_query_struct :: proc(
 	db: ^SQLite3,
@@ -239,7 +243,7 @@ Example:
 
 query, status := prepare(db, "insert into tags (tag) values (?)", "mytag")
 status := execute(db, query)
-if status != .Done { log.error(errmsg(status)) }
+if status != .Done { log.error(errmsg(db)) }
 */
 execute_ignore :: proc(query: ^Stmt) -> Status {
 	for {
@@ -255,7 +259,7 @@ Doesn't handle the rows.
 Example:
 
 status := execute(db, "insert into tags (tag) values (?)", "mytag")
-if status != .Done { log.error(errmsg(status)) }
+if status != .Done { log.error(errmsg(db)) }
 */
 execute_query_ignore :: proc(
 	db: ^SQLite3,

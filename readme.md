@@ -100,8 +100,7 @@ query, status := sqlite.prepare(db, `
 for {
 	row, status := sqlite3.execute(db, query)
     defer delete(row)
-    if status == .Done { break }
-    else { /* handle error */ }
+    if status != nil { break }
 	fmt.println(row)
 }
 ```
@@ -119,8 +118,7 @@ query, status := sqlite.prepare(db, `
 // Iterate the results
 for {
 	row, status := sqlite3.execute(db, query, struct { name: string, flag: bool })
-    if status == .Done { break }
-    else { /* handle error */ }
+    if status != nil { break }
 	fmt.println(row)
 }
 ```
