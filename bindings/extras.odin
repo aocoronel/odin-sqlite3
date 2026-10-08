@@ -122,11 +122,7 @@ execute_query_dynamic :: proc(
 	rows: [dynamic][dynamic]SQLite_Types,
 	status: Status,
 ) {
-	if n == -1 {
-		rows.allocator = allocator
-	} else if n > 0 {
-		rows = make([dynamic][dynamic]SQLite_Types, n, allocator = allocator)
-	}
+	rows.allocator = allocator
 	query := prepare(db, sql, ..args, loc = loc) or_return
 	for {
 		op := step(query)
@@ -210,11 +206,7 @@ execute_query_struct :: proc(
 	rows: [dynamic]T,
 	status: Status,
 ) {
-	if n == -1 {
-		rows.allocator = allocator
-	} else if n > 0 {
-		rows = make([dynamic]T, n, allocator = allocator)
-	}
+	rows.allocator = allocator
 	query := prepare(db, sql, ..args, loc = loc) or_return
 	for {
 		op := step(query)
