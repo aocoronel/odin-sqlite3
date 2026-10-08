@@ -56,10 +56,14 @@ _ = sqlite.execute(db, `
 )
 _ = sqlite.execute(db, `
     INSERT INTO users (name, flag) VALUES
-        ('john', 1),
-        ('mary', 0),
-        ('alice', 1),
-        ('bob', 0);
+        (?, ?),
+        (?, ?),
+        (?, ?),
+        (?, ?);`,
+    "john", 1,
+    "mary", 0,
+    "alice", 1,
+    "bob", 0)
 `)
 ```
 
@@ -83,7 +87,7 @@ query, _ := sqlite.prepare(db, `
     "mary", 0,
     "alice", 1,
     "bob", 0)
-_ = execute(query)
+_ = sqlite.execute(query)
 ```
 
 ### Iterate select results:
@@ -98,7 +102,7 @@ query, status := sqlite.prepare(db, `
 
 // Iterate the results
 for {
-	row, status := sqlite3.execute(db, query)
+	row, status := sqlite.execute(db, query)
     defer delete(row)
     if status != nil { break }
 	fmt.println(row)
@@ -117,7 +121,7 @@ query, status := sqlite.prepare(db, `
 
 // Iterate the results
 for {
-	row, status := sqlite3.execute(db, query, struct { name: string, flag: bool })
+	row, status := sqlite.execute(db, query, struct { name: string, flag: bool })
     if status != nil { break }
 	fmt.println(row)
 }
