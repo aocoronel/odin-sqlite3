@@ -74,7 +74,7 @@ _ = sqlite.execute(db, `
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY,
         name VARCHAR(64) NOT NULL,
-        flag INTEGER NOT NULL,
+        flag INTEGER NOT NULL
    );`
 )
 query, _ := sqlite.prepare(db, `
@@ -97,12 +97,12 @@ _ = sqlite.execute(query)
 query, status := sqlite.prepare(db, `
     INSERT into users (name, flag) VALUES
        (?, ?),
-       (?, ?),
+       (?, ?)
     RETURNING *`, "douglas", 1, "jonathan", 0)
 
 // Iterate the results
 for {
-	row, status := sqlite.execute(db, query)
+	row, status := sqlite.execute(db, query, nil)
     defer delete(row)
     if status != nil { break }
 	fmt.println(row)
@@ -116,7 +116,7 @@ Alternatively, the iteration can be performed without allocations.
 query, status := sqlite.prepare(db, `
     INSERT into users (name, flag) VALUES
        (?, ?),
-       (?, ?),
+       (?, ?)
     RETURNING *`, "douglas", 1, "jonathan", 0)
 
 // Iterate the results
@@ -133,7 +133,7 @@ for {
 rows, status := sqlite.execute(db, context.allocator, `
     INSERT into users (name, flag) VALUES
        (?, ?),
-       (?, ?),
+       (?, ?)
     RETURNING *`, "douglas", 1, "jonathan", 0)
 defer {
 	for row in rows {
@@ -150,7 +150,7 @@ rows, status := sqlite.execute(db, context.allocator,
     struct { name: string, flag: bool }, `
     INSERT into users (name, flag) VALUES
        (?, ?),
-       (?, ?),
+       (?, ?)
     RETURNING *`, "douglas", 1, "jonathan", 0)
 defer delete(rows)
 ```
