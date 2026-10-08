@@ -1,4 +1,3 @@
-
 # odin-sqlite3
 
 > [!WARNING]
@@ -29,52 +28,127 @@ This repository contains sqlite3 bindings and a wrapper library for Odin.
 
 ## Example
 
+> This uses the API provided in bindings/extras.odin.
+
 ### Open the database:
 
 ```odin
 DB_FILE :: "test/db.sqlite"
-db, status := sqlite.open(DB_FILE)
-if status != nil {
-    fmt.eprintf("Unable to open database '%s'(%v): %s", DB_FILE, status, sqlite.status_explain(status))
-    os.exit(1)
+db: ^sqlite3.SQLite3
+err := sqlite3.open(DB_FILE, &db)
+if err != nil {
+	log.errorf("Unable to open database '%s'(%v): %s", DB_FILE, status, sqlite.errmsg(db))
+	return
 }
-
+defer sqlite3.close(db)
 // Do things with database
-
-sqlite.close(db)
 ```
 
 ### Run a simple query to create some tables:
 
 ```odin
-sqlite.sql_exec(db, `
+_ = sqlite.execute(db, `
     CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY
-        , name VARCHAR(64) NOT NULL
-        , flag INTEGER NOT NULL
-    );
+        id INTEGER PRIMARY KEY,
+        name VARCHAR(64) NOT NULL,
+        flag INTEGER NOT NULL,
+    );`
+)
+_ = sqlite.execute(db, `
     INSERT INTO users (name, flag) VALUES
-        ('john', 1)
-        , ('mary', 0)
-        , ('alice', 1)
-        , ('bob', 0);
+        ('john', 1),
+        ('mary', 0),
+        ('alice', 1),
+        ('bob', 0);
 `)
+```
+
+With is equivalent to
+
+```odin
+_ = sqlite.execute(db, `
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY,
+        name VARCHAR(64) NOT NULL,
+        flag INTEGER NOT NULL,
+   );`
+)
+query, _ := sqlite.prepare(db, `
+    INSERT INTO users (name, flag) VALUES
+        (?, ?),
+        (?, ?),
+        (?, ?),
+        (?, ?);`,
+    "john", 1,
+    "mary", 0,
+    "alice", 1,
+    "bob", 0)
+_ = execute(query)
 ```
 
 ### Iterate select results:
 
 ```odin
 // Create prepared statement
-query, _ := sqlite.sql_bind(db, `
-    SELECT
-        name
-        , flag
-    FROM users
-    WHERE flag = ?1;
-`, false)
+query, status := sqlite.prepare(db, `
+    INSERT into users (name, flag) VALUES
+       (?, ?),
+       (?, ?),
+    RETURNING *`, "douglas", 1, "jonathan", 0)
 
 // Iterate the results
-for row in sqlite.sql_row(db, query, struct { name: string, ok: bool }) {
-    fmt.printf("ROW: %v\n", row)
+for {
+	row, status := sqlite3.execute(db, query)
+    defer delete(row)
+    if status == .Done { break }
+    else { /* handle error */ }
+	fmt.println(row)
 }
+```
+
+Alternatively, the iteration can be performed without allocations.
+
+```odin
+// Create prepared statement
+query, status := sqlite.prepare(db, `
+    INSERT into users (name, flag) VALUES
+       (?, ?),
+       (?, ?),
+    RETURNING *`, "douglas", 1, "jonathan", 0)
+
+// Iterate the results
+for {
+	row, status := sqlite3.execute(db, query, struct { name: string, flag: bool })
+    if status == .Done { break }
+    else { /* handle error */ }
+	fmt.println(row)
+}
+```
+
+### Collect all results
+
+```odin
+rows, status := sqlite.execute(db, context.allocator, `
+    INSERT into users (name, flag) VALUES
+       (?, ?),
+       (?, ?),
+    RETURNING *`, "douglas", 1, "jonathan", 0)
+defer {
+	for row in rows {
+		delete(row)
+	}
+	delete(rows)
+}
+```
+
+Alternatively with structs:
+
+```odin
+rows, status := sqlite.execute(db, context.allocator,
+    struct { name: string, flag: bool }, `
+    INSERT into users (name, flag) VALUES
+       (?, ?),
+       (?, ?),
+    RETURNING *`, "douglas", 1, "jonathan", 0)
+defer delete(rows)
 ```
