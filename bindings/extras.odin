@@ -241,7 +241,7 @@ query, status := prepare(db, "insert into tags (tag) values (?)", "mytag")
 status := execute(db, query)
 if status != .Done { log.error(errmsg(status)) }
 */
-execute_ignore :: proc(db: ^SQLite3, query: ^Stmt) -> Status {
+execute_ignore :: proc(query: ^Stmt) -> Status {
 	for {
 		op := step(query)
 		if op == .Row do continue
