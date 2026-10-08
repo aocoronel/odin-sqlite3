@@ -3,22 +3,58 @@ package sqlite3
 import "core:c"
 import "core:c/libc"
 
-when ODIN_OS == .Windows {
-    foreign import sqlite3 "bin/sqlite3.lib"
-} else when ODIN_OS ==.Linux {
-    foreign import sqlite3 {
-        "bin/sqlite3.a",
-        "system:pthread",
-        "system:dl",
-        "system:m",
-    }
-} else when ODIN_OS == .Darwin {
-    foreign import sqlite3 "system:sqlite3"
-}
+VERSION :: "3.53.43"
+VERSION_NUMBER :: 3053043
+SOURCE_ID :: "2026-07-31 22:45 628a44cfe82c66aed1ccbbe85a562d2e33ebe64b3288981ed76285612227934e"
 
-VERSION        :: "3.45.1"
-VERSION_NUMBER :: 3045001
-SOURCE_ID      :: "2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a"
+@(private)
+USE_DYNAMIC_LIB :: #config(SQLITE3_DYNAMIC_LIB, true)
+@(private)
+USE_SYSTEM_LIB :: #config(SQLITE3_SYSTEM_LIB, true)
+
+when ODIN_OS == .Windows {
+	when USE_SYSTEM_LIB {
+		when USE_DYNAMIC_LIB {
+			foreign import sqlite3 "system:libsqlite3.dll"
+		} else {
+			foreign import sqlite3 "system:libsqlite3.lib"
+		}
+	} else {
+		when USE_DYNAMIC_LIB {
+			foreign import sqlite3 "libsqlite3.dll"
+		} else {
+			foreign import sqlite3 "libsqlite3.lib"
+		}
+	}
+} else when ODIN_OS == .Darwin {
+	when USE_SYSTEM_LIB {
+		when USE_DYNAMIC_LIB {
+			foreign import sqlite3 "system:libsqlite3.dylib"
+		} else {
+			foreign import sqlite3 "system:libsqlite3.a"
+		}
+	} else {
+		when USE_DYNAMIC_LIB {
+			foreign import sqlite3 "libsqlite3.dylib"
+		} else {
+			foreign import sqlite3 "libsqlite3.a"
+		}
+	}
+} else when ODIN_OS == .Linux {
+	when USE_SYSTEM_LIB {
+		when USE_DYNAMIC_LIB {
+			foreign import sqlite3 "system:libsqlite3.so"
+		} else {
+			foreign import sqlite3 "system:libsqlite3.a"
+		}
+	} else {
+		when USE_DYNAMIC_LIB {
+			foreign import sqlite3 "libsqlite3.so"
+		} else {
+			foreign import sqlite3 "libsqlite3.a"
+		}
+	}
+}
 
 @(link_prefix = "sqlite3_")
 foreign sqlite3 {
