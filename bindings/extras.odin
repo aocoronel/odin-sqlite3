@@ -351,27 +351,20 @@ read_row_into_dynamic_array :: proc(
 		}
 	}
 
-	raw_row := (^mem.Raw_Dynamic_Array)(&row)
-
 	for i in 0 ..< columns {
 		type := column_type(query, i)
 		switch type {
 		case .Integer:
 			row[i] = column_int64(query, i)
-			raw_row.len += 1
 		case .Float:
 			row[i] = column_double(query, i)
-			raw_row.len += 1
 		case .Text:
 			row[i] = strings.clone_to_cstring(string(column_text(query, i)), temp_allocator, loc)
-			raw_row.len += 1
 		case .Blob:
 			len := int(column_bytes(query, i))
 			row[i] = mem.byte_slice(column_blob(query, i), len)
-			raw_row.len += 1
 		case .Null:
 			row[i] = nil
-			raw_row.len += 1
 		}
 	}
 	return row
