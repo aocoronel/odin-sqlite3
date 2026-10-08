@@ -64,10 +64,10 @@ _ = sqlite.execute(db, `
     "mary", 0,
     "alice", 1,
     "bob", 0)
-`)
+)
 ```
 
-With is equivalent to
+Which is equivalent to:
 
 ```odin
 _ = sqlite.execute(db, `
