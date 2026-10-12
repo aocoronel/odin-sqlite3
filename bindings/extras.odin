@@ -57,7 +57,6 @@ query, status := prepare(db, "select * from tags;")
 row: [dynamic]SQLite_Types
 status: Status
 for {
-    clear(row)
     row, status = execute(db, query, rows = row)
     if status != nil { break }
     id := row[0].(i64)
