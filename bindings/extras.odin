@@ -385,7 +385,7 @@ read_row_into_struct :: proc(
 
 	struct_info := runtime.type_info_base(type_info_of(T)).variant.(runtime.Type_Info_Struct)
 	if struct_info.soa_kind != .None {
-		log.error("#soa structs not accepted.")
+		log.error("#soa structs not accepted.", location = loc)
 		return
 	}
 	if .raw_union in struct_info.flags {
@@ -401,9 +401,10 @@ read_row_into_struct :: proc(
 		field_offs := struct_info.offsets[field_idx]
 		if un, ok := field_base.variant.(runtime.Type_Info_Union); ok {
 			if !un.no_nil || len(un.variants) != 1 {
-				log.errorf, location = loc(
+				log.errorf(
 					"Only Maybe(T) is supported as union argument, %v not accepted",
 					typeid_of(type_of(un)),
+					location = loc,
 				)
 				return
 			}
@@ -435,6 +436,7 @@ read_row_into_struct :: proc(
 				log.error(
 					"Only bool sizes of 1, 2, 4 and 8 bytes are supported. Got: %d",
 					field.size,
+					location = loc,
 				)
 				return
 			}
@@ -454,6 +456,7 @@ read_row_into_struct :: proc(
 					log.error(
 						"Only bool sizes of 1, 2, 4 and 8 bytes are supported. Got: %d",
 						field.size,
+						location = loc,
 					)
 					return
 				}
@@ -466,7 +469,10 @@ read_row_into_struct :: proc(
 					}
 				}
 				if value_idx == -1 {
-					log.error("Enum value extracted from SQL query is not part of enum")
+					log.error(
+						"Enum value extracted from SQL query is not part of enum",
+						location = loc,
+					)
 					return
 				}
 				value := field_variant.values[value_idx]
@@ -483,6 +489,7 @@ read_row_into_struct :: proc(
 					log.error(
 						"Only enum integer sizes of 1, 2, 4 and 8 bytes are supported. Got: %d",
 						field.size,
+						location = loc,
 					)
 					return
 				}
