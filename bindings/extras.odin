@@ -345,9 +345,7 @@ read_row_into_dynamic_array :: proc(
 	if row == nil {
 		row = make([dynamic]SQLite_Types, columns, allocator)
 	} else {
-		if cap(row) < cast(int)columns {
-			reserve(&row, columns)
-		}
+		reserve(&row, columns)
 	}
 
 	for i in 0 ..< columns {
