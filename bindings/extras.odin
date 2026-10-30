@@ -216,6 +216,7 @@ execute_struct :: proc(
 	db: ^SQLite3,
 	query: ^Stmt,
 	$T: typeid,
+	allocator := context.allocator,
 	loc := #caller_location,
 ) -> (
 	row: T,
@@ -224,7 +225,7 @@ execute_struct :: proc(
 	op := step(query)
 	#partial switch op {
 	case .Row:
-		return read_row_into_struct(db, query, T, loc = loc)
+		return read_row_into_struct(db, query, T, allocator, loc = loc)
 	case .Done:
 		finalize(query) or_return
 		status = .Done
@@ -265,7 +266,7 @@ execute_query_struct :: proc(
 		#partial switch op {
 		case .Row:
 			if n == -1 || len(rows) < n {
-				append(&rows, read_row_into_struct(db, query, T, loc = loc) or_return)
+				append(&rows, read_row_into_struct(db, query, T, allocator, loc = loc) or_return)
 			}
 			continue
 		case .Done:
@@ -427,6 +428,7 @@ read_row_into_struct :: proc(
 	db: ^SQLite3,
 	query: ^Stmt,
 	$T: typeid,
+	allocator := context.allocator,
 	loc := #caller_location,
 ) -> (
 	t: T,
@@ -619,9 +621,12 @@ read_row_into_struct :: proc(
 			}
 			value := column_text(query, col_idx)
 			if field_variant.is_cstring {
-				(transmute(^cstring)&t_bytes[field_offs])^ = value
+				(cast(^cstring)&t_bytes[field_offs])^ = strings.clone_to_cstring(
+					string(value),
+					allocator,
+				)
 			} else {
-				(transmute(^string)&t_bytes[field_offs])^ = cast(string)value
+				(cast(^string)&t_bytes[field_offs])^ = strings.clone(cast(string)value, allocator)
 			}
 		case runtime.Type_Info_Array:
 			if col_type != .Blob {
