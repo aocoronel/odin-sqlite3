@@ -35,12 +35,12 @@ This repository contains sqlite3 bindings and a wrapper library for Odin.
 ```odin
 DB_FILE :: "test/db.sqlite"
 db: ^sqlite3.SQLite3
+defer sqlite3.close(db) // should always be called
 err := sqlite3.open(DB_FILE, &db)
 if err != nil {
 	log.errorf("Unable to open database '%s'(%v): %s", DB_FILE, status, sqlite.errmsg(db))
 	return
 }
-defer sqlite3.close(db)
 // Do things with database
 ```
 
@@ -51,9 +51,12 @@ _ = sqlite.execute(db, `
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY,
         name VARCHAR(64) NOT NULL,
-        flag INTEGER NOT NULL,
-    );`
+        flag INTEGER NOT NULL
+   );`
 )
+```
+
+```odin
 _ = sqlite.execute(db, `
     INSERT INTO users (name, flag) VALUES
         (?, ?),
@@ -67,16 +70,9 @@ _ = sqlite.execute(db, `
 )
 ```
 
-Which is equivalent to:
+Which is equivalent to the following:
 
 ```odin
-_ = sqlite.execute(db, `
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY,
-        name VARCHAR(64) NOT NULL,
-        flag INTEGER NOT NULL
-   );`
-)
 query, _ := sqlite.prepare(db, `
     INSERT INTO users (name, flag) VALUES
         (?, ?),
@@ -88,6 +84,26 @@ query, _ := sqlite.prepare(db, `
     "alice", 1,
     "bob", 0)
 _ = sqlite.execute(query)
+
+// When the user creates que stmt manually, they also have to finalize it
+sqlite.finalize(query)
+```
+
+Reusing the same statement:
+
+```odin
+query, _ := sqlite.prepare(db, `
+    INSERT INTO users (name, flag) VALUES
+        (?, ?);`,
+    "mary", 0)
+_ = sqlite.execute(query)
+
+sqlite.reset(query); sqlite.clear_bindings(query);
+bind(query, "alice", 1)
+
+_ = sqlite.execute(query)
+
+sqlite.finalize(query)
 ```
 
 ### Iterate select results:
@@ -104,7 +120,7 @@ query, status := sqlite.prepare(db, `
 for {
 	row, status := sqlite.execute(db, query, nil)
     defer delete(row)
-    if status != nil { break }
+    if status != nil { sqlite.finalize(query); break }
 	fmt.println(row)
 }
 ```
@@ -122,7 +138,7 @@ query, status := sqlite.prepare(db, `
 // Iterate the results
 for {
 	row, status := sqlite.execute(db, query, struct { name: string, flag: bool })
-    if status != nil { break }
+    if status != nil { sqlite.finalize(query); break }
 	fmt.println(row)
 }
 ```

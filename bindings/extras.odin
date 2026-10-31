@@ -111,7 +111,7 @@ row: [dynamic]SQLite_Types
 status: Status
 for {
     row, status = execute(db, query, rows = row)
-    if status != nil { break }
+    if status != nil { finalize(query); break }
     id := row[0].(i64)
     tag := row[1].(cstring)
 }
@@ -131,7 +131,6 @@ execute_dynamic :: proc(
 	case .Row:
 		return read_row_into_dynamic_array(query, rows, allocator, temp_allocator), .Ok
 	case .Done:
-		finalize(query) or_return
 		status = .Done
 		return
 	case:
@@ -192,6 +191,7 @@ execute_query_dynamic :: proc(
 			status = .Done
 			return
 		case:
+			finalize(query) or_return
 			status = op
 			return
 		}
@@ -207,7 +207,7 @@ Example:
 query, status := prepare(db, "insert into tags (tag) values (?) returning *", "mytag")
 for {
     row, status := execute(db, query, struct { id: i64, tag: string })
-    if status != nil { break }
+    if status != nil { finalize(query); break }
     id := row.id
     tag := row.tag
 }
@@ -227,7 +227,6 @@ execute_struct :: proc(
 	case .Row:
 		return read_row_into_struct(db, query, T, allocator, loc = loc)
 	case .Done:
-		finalize(query) or_return
 		status = .Done
 		return
 	case:
@@ -274,6 +273,7 @@ execute_query_struct :: proc(
 			status = .Done
 			return
 		case:
+			finalize(query) or_return
 			status = op
 			return
 		}
@@ -289,6 +289,7 @@ Example:
 query, status := prepare(db, "insert into tags (tag) values (?)", "mytag")
 status := execute(db, query)
 if status != .Done { log.error(errmsg(db)) }
+finalize(query)
 */
 execute_ignore :: proc(query: ^Stmt) -> Status {
 	for {
@@ -316,6 +317,7 @@ execute_query_ignore :: proc(
 	for {
 		op := step(query)
 		if op == .Row do continue
+		finalize(query) or_return
 		return op
 	}
 }
