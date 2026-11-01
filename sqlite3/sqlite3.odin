@@ -3,9 +3,8 @@ package sqlite3
 import "core:c"
 import "core:c/libc"
 
-VERSION :: "3.53.43"
-VERSION_NUMBER :: 3053043
-SOURCE_ID :: "2026-07-31 22:45 628a44cfe82c66aed1ccbbe85a562d2e33ebe64b3288981ed76285612227934e"
+VERSION :: "3.54.1"
+VERSION_NUMBER :: 3540100
 
 @(private)
 USE_DYNAMIC_LIB :: #config(SQLITE3_DYNAMIC_LIB, true)

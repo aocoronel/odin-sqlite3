@@ -2,15 +2,15 @@ setlocal
 
 set CFLAGS=-O2 -fPIC
 
-if not exist bindings\bin mkdir bindings\bin
+if not exist sqlite3\bin mkdir sqlite3\bin
 
-clang %CFLAGS% -c amalgamation\sqlite3.c -o bindings\bin\sqlite3.o
-@echo bindings\bin\sqlite3.o compiled!
+clang %CFLAGS% -c amalgamation\sqlite3.c -o sqlite3\bin\sqlite3.o
+@echo sqlite3\bin\sqlite3.o compiled!
 
-llvm-ar rcs bindings\bin\sqlite3.a bindings\bin\sqlite3.o
-@echo bindings\bin\sqlite3.a compiled!
+llvm-ar rcs sqlite3\bin\sqlite3.a sqlite3\bin\sqlite3.o
+@echo sqlite3\bin\sqlite3.a compiled!
 
-ld -shared -o bindings\bin\sqlite3.so bindings\bin\sqlite3.o
-@echo bindings\bin\sqlite3.so compiled!
+ld -shared -o sqlite3\bin\sqlite3.so sqlite3\bin\sqlite3.o
+@echo sqlite3\bin\sqlite3.so compiled!
 
 endlocal

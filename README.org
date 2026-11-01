@@ -1,38 +1,56 @@
-# odin-sqlite3
+* SQLite3 bindings for Odin
 
-> [!WARNING]
-> These bindings were hand-written and thus can contain many mistakes. In case
-> you found a mistake consider [opening up an issue](https://github.com/flysand7/odin-sqlite3/issues)
-> or making a [pull request](https://github.com/flysand7/odin-sqlite3/pulls).
+#+BEGIN_QUOTE
+These bindings were hand-written and thus can contain many mistakes. In case you found a mistake consider [[https://github.com/aocoronel/odin-sqlite3/issues][opening up an issue]] or making a [[https://github.com/aocoronel/odin-sqlite3/pulls][pull request]].
+#+END_QUOTE
 
-This repository contains sqlite3 bindings and a wrapper library for Odin.
+** Project structure:
 
-## Project structure:
+- ~amalgamation/~: SQLite3's official amalgamation of the source code. Replace the contents of the folder with fresh version of amalgamation to update the version.
+- ~sqlite3/~: Raw bindings of SQLite3, and addons.
 
-- `/amalgamation/`: sqlite3's official amalgamation of the source code. Replace
-    the contents of the folder with fresh version of amalgamation to update the version.
-- `/bindings/`: Raw bindings of sqlite3.
-- `/bindings/bin/`: Compiled binaries of the sqlite3 library.
-- `/wrapper/`: A more convenient interface to the sqlite3 library.
-- `/test/`: An example of using the sqlite3 wrapper.
+** Using
 
-## Building and usage.
+Clone the repository.
 
-1. Clone this repository.
-2. Build the binaries:
-    - Windows: Run `./build-cl.bat`, in case you want to build with MSVC compiler; or `./build-clang-windows.bat` to build the clang.
-    - Linux: Run `./build-clang-linux`
-3. Copy the files to your project:
-    - Just the bindings: copy `/bindings` directories.
-    - With the wrapper: copy `/bindings` and `/wrapper` directories.
+#+BEGIN_SRC bash
+git clone https://github.com/aocoronel/odin-sqlite3
+#+END_SRC
 
-## Example
+Compile SQLite3 from source to ~sqlite3/bin/~, or install SQLite3 in the system.
 
-> This uses the API provided in bindings/extras.odin.
+- Windows:
+  - MSVC: ~./build.cl.bat~
+  - Clang: ~./build-clang-windows~
+- Unix:
+  - GCC: ~./build-gcc.sh~
+  - Clang: ~./build-clang.sh~
 
-### Open the database:
+Move the ~sqlite3~ directory to your project, or to the Odin ~shared/~ library, which you will find in ~odin root~.
 
-```odin
+Importing the library:
+
+#+BEGIN_SRC odin
+  import "shared:sqlite3"
+
+  // If installed in shared/
+  odin run .
+
+  // Otherwise
+  odin run . -collection:shared=path/to/shared
+  // NOTE: 'shared' is an optional name, but just happens to be convenient
+  // if you want both to have sqlite3 locally and globally
+#+END_SRC
+
+** Example
+
+#+BEGIN_QUOTE
+This uses the API provided in [[sqlite3/extras.odin]], which isn't part of SQLite3. Otherwise, use the official [[https://sqlite.org/docs.html][SQLite3 documentation]], for more details.
+#+END_QUOTE
+
+*** Open the database:
+
+#+BEGIN_SRC odin
 DB_FILE :: "test/db.sqlite"
 db: ^sqlite3.SQLite3
 defer sqlite3.close(db) // should always be called
@@ -42,11 +60,11 @@ if err != nil {
 	return
 }
 // Do things with database
-```
+#+END_SRC
 
-### Run a simple query to create some tables:
+*** Run a simple query to create some tables:
 
-```odin
+#+BEGIN_SRC odin
 _ = sqlite.execute(db, `
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY,
@@ -54,9 +72,9 @@ _ = sqlite.execute(db, `
         flag INTEGER NOT NULL
    );`
 )
-```
+#+END_SRC
 
-```odin
+#+BEGIN_SRC odin
 _ = sqlite.execute(db, `
     INSERT INTO users (name, flag) VALUES
         (?, ?),
@@ -68,11 +86,11 @@ _ = sqlite.execute(db, `
     "alice", 1,
     "bob", 0)
 )
-```
+#+END_SRC
 
 Which is equivalent to the following:
 
-```odin
+#+BEGIN_SRC odin
 query, _ := sqlite.prepare(db, `
     INSERT INTO users (name, flag) VALUES
         (?, ?),
@@ -87,11 +105,11 @@ _ = sqlite.execute(query)
 
 // When the user creates que stmt manually, they also have to finalize it
 sqlite.finalize(query)
-```
+#+END_SRC
 
 Reusing the same statement:
 
-```odin
+#+BEGIN_SRC odin
 query, _ := sqlite.prepare(db, `
     INSERT INTO users (name, flag) VALUES
         (?, ?);`,
@@ -104,11 +122,11 @@ bind(query, "alice", 1)
 _ = sqlite.execute(query)
 
 sqlite.finalize(query)
-```
+#+END_SRC
 
-### Iterate select results:
+*** Iterate select results:
 
-```odin
+#+BEGIN_SRC odin
 // Create prepared statement
 query, status := sqlite.prepare(db, `
     INSERT into users (name, flag) VALUES
@@ -123,11 +141,11 @@ for {
     if status != nil { sqlite.finalize(query); break }
 	fmt.println(row)
 }
-```
+#+END_SRC
 
 Alternatively, the iteration can be performed without allocations.
 
-```odin
+#+BEGIN_SRC odin
 // Create prepared statement
 query, status := sqlite.prepare(db, `
     INSERT into users (name, flag) VALUES
@@ -141,11 +159,11 @@ for {
     if status != nil { sqlite.finalize(query); break }
 	fmt.println(row)
 }
-```
+#+END_SRC
 
-### Collect all results
+*** Collect all results
 
-```odin
+#+BEGIN_SRC odin
 rows, status := sqlite.execute(db, context.allocator, `
     INSERT into users (name, flag) VALUES
        (?, ?),
@@ -157,11 +175,11 @@ defer {
 	}
 	delete(rows)
 }
-```
+#+END_SRC
 
 Alternatively with structs:
 
-```odin
+#+BEGIN_SRC odin
 rows, status := sqlite.execute(db, context.allocator,
     struct { name: string, flag: bool }, `
     INSERT into users (name, flag) VALUES
@@ -169,4 +187,4 @@ rows, status := sqlite.execute(db, context.allocator,
        (?, ?)
     RETURNING *`, "douglas", 1, "jonathan", 0)
 defer delete(rows)
-```
+#+END_SRC
