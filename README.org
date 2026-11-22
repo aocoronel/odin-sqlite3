@@ -1,13 +1,28 @@
 * SQLite3 bindings for Odin
 
 #+BEGIN_QUOTE
+This project was hard forked from [[https://github.com/flysand7/odin-sqlite3][odin-sqlite3]] by [[https://github.com/flysand7][Sunagatov Denis]], who did port most part of the bindings.
+
 These bindings were hand-written and thus can contain many mistakes. In case you found a mistake consider [[https://github.com/aocoronel/odin-sqlite3/issues][opening up an issue]] or making a [[https://github.com/aocoronel/odin-sqlite3/pulls][pull request]].
+
+*Progress:* missing to port SQLite Sessions and FTS5. If you don't need any of these, you can already use it.
 #+END_QUOTE
 
 ** Project structure:
 
 - ~amalgamation/~: SQLite3's official amalgamation of the source code. Replace the contents of the folder with fresh version of amalgamation to update the version.
 - ~sqlite3/~: Raw bindings of SQLite3, and addons.
+- ~test/~: Test addons.
+
+** Convention
+
+- Declarations happens in the same order as ~sqlite.h~.
+- Declarations persist the original C header comments.
+- Removed all sqlite/SQLITE prefixes.
+- No legacy procedures.
+- Naming conventions follows Odin's.
+- Type names follow the original, or if doesn't exist they are adapted.
+- Procedure names follow the original.
 
 ** Using
 
@@ -17,7 +32,7 @@ Clone the repository.
 git clone https://github.com/aocoronel/odin-sqlite3
 #+END_SRC
 
-Compile SQLite3 from source to ~sqlite3/bin/~, or install SQLite3 in the system.
+Compile SQLite3 from source to ~sqlite3/amalgamation/~, or install SQLite3 in the system.
 
 - Windows:
   - MSVC: ~./build.cl.bat~
@@ -45,7 +60,7 @@ Importing the library:
 ** Example
 
 #+BEGIN_QUOTE
-This uses the API provided in [[sqlite3/extras.odin]], which isn't part of SQLite3. Otherwise, use the official [[https://sqlite.org/docs.html][SQLite3 documentation]], for more details.
+This uses the API provided in [[.sqlite3/wrapper.odin]] and [[./sqlite3/exec.odin]] which isn't part of SQLite3. Otherwise, use the official [[https://sqlite.org/docs.html][SQLite3 documentation]], for more details. Alternatively, the [[./sqlite3/sqlite3.odin]] contains all the original C header comments.
 #+END_QUOTE
 
 *** Open the database:
@@ -65,7 +80,7 @@ if err != nil {
 *** Run a simple query to create some tables:
 
 #+BEGIN_SRC odin
-_ = sqlite.execute(db, `
+_ = sqlite.exec(db, `
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY,
         name VARCHAR(64) NOT NULL,
@@ -75,7 +90,7 @@ _ = sqlite.execute(db, `
 #+END_SRC
 
 #+BEGIN_SRC odin
-_ = sqlite.execute(db, `
+_ = sqlite.exec(db, `
     INSERT INTO users (name, flag) VALUES
         (?, ?),
         (?, ?),
@@ -101,7 +116,7 @@ query, _ := sqlite.prepare(db, `
     "mary", 0,
     "alice", 1,
     "bob", 0)
-_ = sqlite.execute(query)
+_ = sqlite.exec(query)
 
 // When the user creates que stmt manually, they also have to finalize it
 sqlite.finalize(query)
@@ -114,12 +129,12 @@ query, _ := sqlite.prepare(db, `
     INSERT INTO users (name, flag) VALUES
         (?, ?);`,
     "mary", 0)
-_ = sqlite.execute(query)
+_ = sqlite.exec(query)
 
 sqlite.reset(query); sqlite.clear_bindings(query);
 bind(query, "alice", 1)
 
-_ = sqlite.execute(query)
+_ = sqlite.exec(query)
 
 sqlite.finalize(query)
 #+END_SRC
@@ -136,11 +151,12 @@ query, status := sqlite.prepare(db, `
 
 // Iterate the results
 for {
-	row, status := sqlite.execute(db, query, nil)
-    defer delete(row)
-    if status != nil { sqlite.finalize(query); break }
+	row, status := sqlite.exec_dynamic(db, query)
+	if status != nil { break }
+	defer delete(row)
 	fmt.println(row)
 }
+sqlite.finalize(query)
 #+END_SRC
 
 Alternatively, the iteration can be performed without allocations.
@@ -155,36 +171,66 @@ query, status := sqlite.prepare(db, `
 
 // Iterate the results
 for {
-	row, status := sqlite.execute(db, query, struct { name: string, flag: bool })
-    if status != nil { sqlite.finalize(query); break }
+	row, status := sqlite.exec_struct(db, query, struct { name: string, flag: bool })
+	if status != nil { break }
 	fmt.println(row)
 }
+sqlite.finalize(query)
 #+END_SRC
 
 *** Collect all results
 
 #+BEGIN_SRC odin
-rows, status := sqlite.execute(db, context.allocator, `
-    INSERT into users (name, flag) VALUES
-       (?, ?),
-       (?, ?)
-    RETURNING *`, "douglas", 1, "jonathan", 0)
-defer {
-	for row in rows {
-		delete(row)
-	}
-	delete(rows)
-}
+  rows, tail, status := sqlite.exec_dynamic(db, context.allocator, `
+      INSERT into users (name, flag) VALUES
+  (?, ?),
+         (?, ?)
+      RETURNING *`, "douglas", 1, "jonathan", 0)
+  defer {
+  	for row in rows {
+  		delete(row)
+  	}
+  	delete(rows)
+  }
 #+END_SRC
 
 Alternatively with structs:
 
 #+BEGIN_SRC odin
-rows, status := sqlite.execute(db, context.allocator,
-    struct { name: string, flag: bool }, `
-    INSERT into users (name, flag) VALUES
-       (?, ?),
-       (?, ?)
-    RETURNING *`, "douglas", 1, "jonathan", 0)
-defer delete(rows)
+  rows, tail, status := sqlite.exec_struct(db, context.allocator,
+      struct { name: string, flag: bool }, `
+      INSERT into users (name, flag) VALUES
+         (?, ?),
+         (?, ?)
+      RETURNING *`, "douglas", 1, "jonathan", 0)
+  defer delete(rows)
 #+END_SRC
+
+*** Getting the columns and rows
+
+#+BEGIN_SRC odin
+  cols, vals, tail, rc := sqlite.exec_column(db, context.allocator,
+      `INSERT into users (name, flag) VALUES
+         (?, ?),
+         (?, ?)
+      RETURNING *`, "douglas", 1, "jonathan", 0)
+  defer {
+  	for col in cols {
+  		delete(col)
+  	}
+          delete(cols)
+  }
+#+END_SRC
+
+*** Execute all statements
+
+#+BEGIN_SRC odin
+  rc := sqlite.exec_all(db,
+  	```
+  	INSERT INTO users (name, flag) VALUES ('bob', 1); -- 1
+  	SELECT * from users; -- 2
+  	```, callback, nil,
+  )
+#+END_SRC
+
+# *** Iterating statements
