@@ -109,6 +109,7 @@ Example:
 	if rc != .Ok { log.error(errmsg(db)) }
 */
 exec :: proc {
+	exec_ignore,
 	exec_ignore_query,
 }
 
@@ -141,7 +142,7 @@ is_stmt_valid :: #force_inline proc "contextless" (
 	return false
 }
 
-exec_dynamic_query :: #force_inline proc(
+exec_dynamic_query :: proc(
 	db: ^SQLite3,
 	sql: $T,
 	args: ..any,
@@ -167,7 +168,7 @@ exec_dynamic_query :: #force_inline proc(
 	return
 }
 
-exec_column_query :: #force_inline proc(
+exec_column_query :: proc(
 	db: ^SQLite3,
 	sql: $T,
 	cols: ^[dynamic]cstring,
@@ -222,7 +223,7 @@ exec_column_query :: #force_inline proc(
 	return
 }
 
-exec_struct_query :: #force_inline proc(
+exec_struct_query :: proc(
 	db: ^SQLite3,
 	sql: $T,
 	$S: typeid,
@@ -252,7 +253,14 @@ exec_struct_query :: #force_inline proc(
 	return
 }
 
-exec_ignore_query :: #force_inline proc(
+exec_ignore :: #force_inline proc(stmt: ^Stmt) -> (rc: Result_Code) {
+	for {
+		rc = step(stmt)
+		if rc != .Row do return
+	}
+}
+
+exec_ignore_query :: proc(
 	db: ^SQLite3,
 	sql: $T,
 	args: ..any,
