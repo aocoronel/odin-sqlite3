@@ -4,7 +4,7 @@ Better sqlite3_exec()
 package sqlite3
 
 import "base:intrinsics"
-import "base:runtime"
+import rt "base:runtime"
 import "core:log"
 import "core:mem"
 import "core:strings"
@@ -34,17 +34,16 @@ Only executes one statement.
 
 Example:
 
-rows, rc := exec_struct(db,
-	"INSERT INTO tags (tag) VALUES (?) RETURNING *", "mytag",
-	struct { id: i64, tag: string }
-)
-defer delete(rows)
-if rc != .Ok { log.error(errmsg(db)) }
+	rows, rc := exec_struct(db,
+		"INSERT INTO tags (tag) VALUES (?) RETURNING *", "mytag",
+		struct { id: i64, tag: string }
+	)
+	defer delete(rows)
+	if rc != .Ok { log.error(errmsg(db)) }
 */
 exec_struct :: proc {
 	read_row_into_struct,
-	exec8_struct_query,
-	exec16_struct_query,
+	exec_struct_query,
 }
 
 /*
@@ -56,22 +55,21 @@ Only executes one statement.
 
 Example:
 
-rows, _, rc := exec_dynamic(
-	db, "INSERT INTO tags (tag) VALUES (?) RETURNING *",
-	"mytag"
-)
-defer {
-	for row in rows {
-		delete(row)
+	rows, _, rc := exec_dynamic(
+		db, "INSERT INTO tags (tag) VALUES (?) RETURNING *",
+		"mytag"
+	)
+	defer {
+		for row in rows {
+			delete(row)
+		}
+		delete(rows)
 	}
-	delete(rows)
-}
-if rc != .Ok { log.error(errmsg(db)) }
+	if rc != .Ok { log.error(errmsg(db)) }
 */
 exec_dynamic :: proc {
 	read_row_into_dynamic_array,
-	exec8_dynamic_query,
-	exec16_dynamic_query,
+	exec_dynamic_query,
 }
 
 /*
@@ -81,23 +79,23 @@ Only executes one statement.
 
 Example:
 
-cols, vals, tail, rc := exec_dynamic(
-	db, "INSERT INTO tags (tag) VALUES (?) RETURNING *",
-	"mytag"
-)
-defer {
-	for col in cols {
-		/* 'vals' shares the same array as 'cols' */
-		delete(col)
+	dyn_cols: [dynamic]cstring
+	cols, vals, rc := exec_dynamic(
+		db, "INSERT INTO tags (tag) VALUES (?) RETURNING *", &dyn_cols,
+		"mytag",
+	)
+	defer {
+		for col in dyn_cols {
+			/* 'vals' shares the same array as 'cols' */
+			delete(col)
+		}
+		delete(cols)
 	}
-	delete(cols)
-}
-if rc != .Ok { log.error(errmsg(db)) }
+	if rc != .Ok { log.error(errmsg(db)) }
 */
 exec_column :: proc {
 	read_row_into_column_array,
-	exec8_column_query,
-	exec16_column_query,
+	exec_column_query,
 }
 
 /*
@@ -107,12 +105,11 @@ Only executes one statement.
 
 Example:
 
-rc := exec(db, "INSERT INTO tags (tag) VALUES (?)", "mytag")
-if rc != .Ok { log.error(errmsg(db)) }
+	rc := exec(db, "INSERT INTO tags (tag) VALUES (?)", "mytag")
+	if rc != .Ok { log.error(errmsg(db)) }
 */
 exec :: proc {
-	exec8_ignore_query,
-	exec16_ignore_query,
+	exec_ignore_query,
 }
 
 exec_all :: proc {
@@ -120,213 +117,76 @@ exec_all :: proc {
 	exec_all_no_callback,
 }
 
-exec16_dynamic_query :: proc(
-	db: ^SQLite3,
-	sql: $Q,
-	args: ..any,
-	allocator := context.temp_allocator,
-	loc := #caller_location,
-) -> (
-	rows: [dynamic][dynamic]SQLite_Types,
-	tail: cstring16,
-	rc: Result_Code,
-) where Q == string16 ||
-	Q == cstring16 {
-	return _exec_dynamic_query(cstring16, db, sql, ..args, allocator = allocator, loc = loc)
-}
-
-exec8_dynamic_query :: proc(
-	db: ^SQLite3,
-	sql: $Q,
-	args: ..any,
-	allocator := context.temp_allocator,
-	loc := #caller_location,
-) -> (
-	rows: [dynamic][dynamic]SQLite_Types,
-	tail: cstring,
-	rc: Result_Code,
-) where Q == string ||
-	Q == cstring {
-	return _exec_dynamic_query(cstring, db, sql, ..args, allocator = allocator, loc = loc)
-}
-
-exec16_column_query :: proc(
-	db: ^SQLite3,
-	sql: $Q,
-	args: ..any,
-	cols: [dynamic]cstring = nil,
-	allocator := context.temp_allocator,
-	loc := #caller_location,
-) -> (
-	sCols, sVals: []cstring,
-	tail: cstring16,
-	rc: Result_Code,
-) where Q == string16 ||
-	Q == cstring16 {
-	return _exec_column_query(
-		cstring16,
-		db,
-		sql,
-		..args,
-		cols = cols,
-		allocator = allocator,
-		loc = loc,
-	)
-}
-
-exec8_column_query :: proc(
-	db: ^SQLite3,
-	sql: $Q,
-	args: ..any,
-	cols: [dynamic]cstring = nil,
-	allocator := context.temp_allocator,
-	loc := #caller_location,
-) -> (
-	sCols, sVals: []cstring,
-	tail: cstring,
-	rc: Result_Code,
-) where Q == string ||
-	Q == cstring {
-	return _exec_column_query(
-		cstring,
-		db,
-		sql,
-		..args,
-		cols = cols,
-		allocator = allocator,
-		loc = loc,
-	)
-}
-
-exec16_struct_query :: proc(
-	db: ^SQLite3,
-	sql: $Q,
-	$T: typeid,
-	args: ..any,
-	allocator := context.temp_allocator,
-	loc := #caller_location,
-) -> (
-	rows: [dynamic]T,
-	tail: cstring16,
-	rc: Result_Code,
-) where Q == string16 ||
-	Q == cstring16 {
-	return _exec_struct_query(cstring16, db, sql, T, ..args, allocator = allocator, loc = loc)
-}
-
-exec8_struct_query :: proc(
-	db: ^SQLite3,
-	sql: $Q,
-	$T: typeid,
-	args: ..any,
-	allocator := context.temp_allocator,
-	loc := #caller_location,
-) -> (
-	rows: [dynamic]T,
-	tail: cstring,
-	rc: Result_Code,
-) where Q == string ||
-	Q == cstring {
-	return _exec_struct_query(cstring, db, sql, T, ..args, allocator = allocator, loc = loc)
-}
-
-exec16_ignore_query :: proc(
-	db: ^SQLite3,
-	sql: $T,
-	args: ..any,
-	loc := #caller_location,
-) -> (
-	tail: cstring16,
-	rc: Result_Code,
-) where T == string16 ||
-	T == cstring16 {
-	return _exec_ignore_query(cstring16, db, sql, ..args, loc = loc)
-}
-
-exec8_ignore_query :: proc(
-	db: ^SQLite3,
-	sql: $T,
-	args: ..any,
-	loc := #caller_location,
-) -> (
-	tail: cstring,
-	rc: Result_Code,
-) where T == string ||
-	T == cstring {
-	return _exec_ignore_query(cstring, db, sql, ..args, loc = loc)
-}
-
-// WIP: early exit if query is empty
-_invalid_query :: #force_inline proc "contextless" (
+/*
+Checks if the tail received from prepare() is valid, and can
+be used to prepare another statement.
+*/
+is_stmt_valid :: #force_inline proc "contextless" (
 	sql: $T,
 ) -> bool where T == string16 ||
 	T == cstring16 ||
 	T == string ||
 	T == cstring {
 	when T == string || T == string16 {
-		if len(sql) > 0 do return false
+		if len(sql) > 0 do return true
 	} else when T == cstring {
 		if sql != nil && (cast([^]u8)sql)[0] != 0 {
-			return false
+			return true
 		}
 	} else when T == cstring16 {
 		if sql != nil && (cast([^]u16)sql)[0] != 0 {
-			return false
+			return true
 		}
 	}
-	return true
+	return false
 }
 
-_exec_dynamic_query :: #force_inline proc(
-	$TAIL_TYPE: typeid,
+exec_dynamic_query :: #force_inline proc(
 	db: ^SQLite3,
-	sql: $Q,
+	sql: $T,
 	args: ..any,
+	tail: ^T = nil,
 	allocator := context.temp_allocator,
 	loc := #caller_location,
 ) -> (
-	rows: [dynamic][dynamic]SQLite_Types,
-	tail: TAIL_TYPE,
+	rows: [dynamic][]SQLite_Types,
 	rc: Result_Code,
-) where (TAIL_TYPE == cstring && Q == string || Q == cstring) ||
-	(TAIL_TYPE == cstring16 && Q == string16 || Q == cstring16) {
-	if _invalid_query(sql) do return
-
-	rows.allocator = allocator
+) where T == string ||
+	T == string16 ||
+	T == cstring ||
+	T == cstring16 {
 	stmt: ^Stmt
-
-	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
+	stmt, rc = prepare(db, sql, ..args, tail = tail, loc = loc)
 	if rc == .Ok {
 		for {
 			if step(stmt) != .Row do break
-			append(&rows, read_row_into_dynamic_array(stmt, nil, allocator, loc))
+			append(&rows, read_row_into_dynamic_array(stmt, allocator, loc))
 		}
 	}
-
 	rc = finalize(stmt)
 	return
 }
 
-_exec_column_query :: #force_inline proc(
-	$TAIL_TYPE: typeid,
+exec_column_query :: #force_inline proc(
 	db: ^SQLite3,
-	sql: $Q,
+	sql: $T,
+	cols: ^[dynamic]cstring,
 	args: ..any,
-	cols: [dynamic]cstring = nil,
+	tail: ^T = nil,
 	allocator := context.temp_allocator,
 	loc := #caller_location,
 ) -> (
-	sCols, sVals: []cstring,
-	tail: TAIL_TYPE,
+	columns, rows: []cstring,
 	rc: Result_Code,
-) where (TAIL_TYPE == cstring && Q == string || Q == cstring) ||
-	(TAIL_TYPE == cstring16 && Q == string16 || Q == cstring16) {
-	if _invalid_query(sql) do return
+) where T == string ||
+	T == string16 ||
+	T == cstring ||
+	T == cstring16 {
+	assert(cols != nil)
+	context.allocator = allocator
 
 	stmt: ^Stmt
-	cols := cols
-
-	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
+	stmt, rc = prepare(db, sql, ..args, tail = tail, loc = loc)
 	if rc == .Ok {
 		init := true
 		ncols: i32
@@ -334,30 +194,26 @@ _exec_column_query :: #force_inline proc(
 			rc = step(stmt)
 			if rc != .Row do break
 			if init {
+				init = false
 				ncols = column_count(stmt)
-
-				if cols == nil {
-					cols = make([dynamic]cstring, ncols * 2, allocator)
-				} else {
-					reserve(&cols, int(ncols * 2))
-				}
-
+				resize(cols, int(ncols * 2))
 				for i: i32 = 0; i < ncols; i += 1 {
-					cols[i] = column_name(stmt, i)
+					cols[i] = clone(column_name(stmt, i))
 					assert(cols[i] != nil)
 				}
-				init = false
 			}
-			vals := cast([^]cstring)(&cols[ncols])
+			vals := (cast([^]cstring)(&cols[ncols]))[:ncols]
 			for i: i32 = 0; i < ncols; i += 1 {
-				vals[i] = column_text(stmt, i)
+				vals[i] = clone(column_text(stmt, i))
 				if (vals[i] == nil && column_type(stmt, i) != .Null) {
-					rc = set_errmsg(db, .No_Mem, "out of memory")
+					finalize(stmt)
+					set_errmsg(db, .No_Mem, "out of memory")
+					rc = .No_Mem
 					return
 				}
 			}
-			sCols = cols[:ncols]
-			sVals = vals[:ncols]
+			columns = cols[:ncols]
+			rows = vals
 		}
 	}
 
@@ -366,30 +222,29 @@ _exec_column_query :: #force_inline proc(
 	return
 }
 
-_exec_struct_query :: #force_inline proc(
-	$TAIL_TYPE: typeid,
+exec_struct_query :: #force_inline proc(
 	db: ^SQLite3,
-	sql: $Q,
-	$T: typeid,
+	sql: $T,
+	$S: typeid,
 	args: ..any,
+	tail: ^T = nil,
 	allocator := context.temp_allocator,
 	loc := #caller_location,
 ) -> (
-	rows: [dynamic]T,
-	tail: TAIL_TYPE,
+	rows: [dynamic]S,
 	rc: Result_Code,
-) where (TAIL_TYPE == cstring && Q == string || Q == cstring) ||
-	(TAIL_TYPE == cstring16 && Q == string16 || Q == cstring16) {
-	if _invalid_query(sql) do return
-
+) where T == string ||
+	T == string16 ||
+	T == cstring ||
+	T == cstring16 {
 	rows.allocator = allocator
-	stmt: ^Stmt
 
-	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
+	stmt: ^Stmt
+	stmt, rc = prepare(db, sql, ..args, tail = tail, loc = loc)
 	if rc == .Ok {
 		for {
 			if step(stmt) != .Row do break
-			append(&rows, read_row_into_struct(db, stmt, T, allocator, loc = loc) or_return)
+			append(&rows, read_row_into_struct(db, stmt, S, allocator, loc = loc) or_return)
 		}
 	}
 
@@ -397,27 +252,25 @@ _exec_struct_query :: #force_inline proc(
 	return
 }
 
-_exec_ignore_query :: #force_inline proc(
-	$TAIL_TYPE: typeid,
+exec_ignore_query :: #force_inline proc(
 	db: ^SQLite3,
-	sql: $Q,
+	sql: $T,
 	args: ..any,
+	tail: ^T = nil,
 	loc := #caller_location,
 ) -> (
-	tail: TAIL_TYPE,
 	rc: Result_Code,
-) where (TAIL_TYPE == cstring && Q == string || Q == cstring) ||
-	(TAIL_TYPE == cstring16 && Q == string16 || Q == cstring16) {
-	if _invalid_query(sql) do return
+) where T == string ||
+	T == string16 ||
+	T == cstring ||
+	T == cstring16 {
 	stmt: ^Stmt
-
-	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
+	stmt, rc = prepare(db, sql, ..args, tail = tail, loc = loc)
 	if rc == .Ok {
 		for {
 			if step(stmt) != .Row do break
 		}
 	}
-
 	rc = finalize(stmt)
 	return
 }
@@ -436,32 +289,22 @@ exec_all_no_callback :: proc(
 	T == string ||
 	T == string16 ||
 	T == cstring16 {
-	STRING :: cstring when T == string || T == cstring else cstring16
-	ARRAY_CAST :: u8 when T == string || T == cstring else u16
-
-	leftover: STRING
-	next: T = sql
+	leftover: T = sql
 	stmt: ^Stmt
+	loop: for rc == .Ok {
+		if !is_stmt_valid(leftover) do break
 
-	for rc == .Ok {
-		when T == string || T == string16 {
-			if len(next) == 0 do break
-		} else {
-			if next != nil && (cast([^]ARRAY_CAST)next)[0] == 0 {
-				break
-			}
-		}
-		stmt, rc = prepare(db, next, tail = &leftover)
-		if rc != .Ok { rc = finalize(stmt); return }
+		stmt, rc = prepare(db, leftover, tail = &leftover)
+		if rc != .Ok do break
 
 		for {
-			if step(stmt) != .Row do break
+			if step(stmt) != .Row do break loop
 		}
 
 		rc = finalize(stmt)
-		next = string(leftover) when STRING == string || STRING == cstring else string16(leftover)
 	}
 
+	rc = finalize(stmt)
 	return
 }
 
@@ -476,23 +319,14 @@ exec_all_callback :: proc(
 	T == string ||
 	T == string16 ||
 	T == cstring16 {
-	STRING :: cstring when T == string || T == cstring else cstring16
-	ARRAY_CAST :: u8 when T == string || T == cstring else u16
-
-	leftover: STRING
-	next: T = sql
+	leftover: T = sql
 	stmt: ^Stmt
 
 	cols := make([dynamic]cstring, context.temp_allocator)
 	for rc == .Ok {
-		when T == string || T == string16 {
-			if len(next) == 0 do break
-		} else {
-			if next != nil && (cast([^]ARRAY_CAST)next)[0] == 0 {
-				break
-			}
-		}
-		stmt, rc = prepare(db, next, tail = &leftover)
+		if !is_stmt_valid(leftover) do break
+
+		stmt, rc = prepare(db, leftover, tail = &leftover)
 		if rc != .Ok { rc = finalize(stmt); return }
 
 		init := true
@@ -500,45 +334,49 @@ exec_all_callback :: proc(
 		for {
 			if step(stmt) != .Row do break
 			if init {
+				init = false
 				ncols = column_count(stmt)
 				resize(&cols, ncols * 2)
 				for i: i32 = 0; i < ncols; i += 1 {
 					cols[i] = column_name(stmt, i)
 					assert(cols[i] != nil)
 				}
-				init = false
 			}
-			vals := cast([^]cstring)(&cols[ncols])
+			vals := (cast([^]cstring)(&cols[ncols]))[:ncols]
 			for i: i32 = 0; i < ncols; i += 1 {
 				vals[i] = column_text(stmt, i)
 				if (vals[i] == nil && column_type(stmt, i) != .Null) {
-					return set_errmsg(db, .No_Mem, "out of memory")
+					finalize(stmt)
+					set_errmsg(db, .No_Mem, "out of memory")
+					return .Abort
 				}
 			}
-			if !callback(arg, ncols, vals[:ncols], cols[:ncols]) {
+			if !callback(arg, ncols, vals, cols[:ncols]) {
 				finalize(stmt)
-				return set_errmsg(db, .Abort, "callback aborted")
+				set_errmsg(db, .Abort, "callback aborted")
+				return .Abort
 			}
 		}
 
 		rc = finalize(stmt)
-		next = string(leftover) when STRING == string || STRING == cstring else string16(leftover)
 	}
 
 	return
 }
 
 /*
+Writes columns and rows.
+
 Example:
 
-  init: bool
-  cols := make([dynamic]cstring, context.temp_allocator)
-  for {
-  	rc = sqlite.step(stmt)
-  	if rc != .Row do break
-  	cols, vals, rc := sqlite.exec_column(db, stmt, &init, &cols)
-  }
-  rc = sqlite.finalize(stmt)
+	init: bool
+	cols := make([dynamic]cstring, context.temp_allocator)
+	for {
+		rc = sqlite.step(stmt)
+		if rc != .Row do break
+		cols, vals, rc := sqlite.exec_column(db, stmt, &init, &cols)
+	}
+	rc = sqlite.finalize(stmt)
 */
 read_row_into_column_array :: proc(
 	db: ^SQLite3,
@@ -546,9 +384,10 @@ read_row_into_column_array :: proc(
 	is_initialized: ^bool,
 	cols: ^[dynamic]cstring,
 ) -> (
-	sCols, sVals: []cstring,
+	columns, rows: []cstring,
 	rc: Result_Code,
 ) {
+	assert(cols != nil)
 	ncols: i32
 
 	if !is_initialized^ {
@@ -562,62 +401,63 @@ read_row_into_column_array :: proc(
 		}
 		is_initialized^ = true
 	}
-	vals := cast([^]cstring)(&cols[ncols])
+	vals := (cast([^]cstring)(&cols[ncols]))[:ncols]
 	for i: i32 = 0; i < ncols; i += 1 {
 		vals[i] = column_text(stmt, i)
 		if (vals[i] == nil && column_type(stmt, i) != .Null) {
-			rc = set_errmsg(db, .No_Mem, "out of memory")
+			set_errmsg(db, .No_Mem, "out of memory")
+			rc = .No_Mem
 			return
 		}
 	}
-	sCols = cols[:ncols]
-	sVals = vals[:ncols]
+	columns = cols[:ncols]
+	rows = vals
 
 	return
 }
 
 /*
-Populates a dynamic array with the types provided in order.
+Dynamically append SQLite types from query.
 
-Freeing the memory is necessary. The user can optionally reset the dynamic array and pass
-it back, to minimize allocations.
+TBD:
 
-Example:
+- Binding a cstring does requires allocations.
 
-stmt, rc := prepare(db, "INSERT INTO tags (tag) VALUES (?) RETURNING *", "mytag")
-for {
-    rc = step(stmt)
-    if rc != .Row { finalize(stmt); break }
-    row := exec_dynamic(stmt)
-    id := row[0].(i64)
-    tag := row[1].(cstring)
-}
+Example #1:
 
-stmt, rc := prepare(db, "SELECT * FROM tags;")
-row: [dynamic]SQLite_Types
-for {
-    rc = step(stmt)
-    if rc != .Row { finalize(stmt); break }
-    exec_dynamic(stmt, row)
-    id := row[0].(i64)
-    tag := row[1].(cstring)
-}
+	stmt, rc := prepare(db, "INSERT INTO tags (tag) VALUES (?) RETURNING *", "mytag")
+	for {
+		rc = step(stmt)
+		if rc != .Row { break }
+		row := exec_dynamic(stmt)
+		defer delete(row)
+		id := row[0].(i64)
+		tag := row[1].(cstring)
+	}
+	rc = finalize(stmt)
+
+Example #2:
+
+	stmt, rc := prepare(db, "SELECT * FROM tags;")
+	for {
+		rc = step(stmt)
+		if rc != .Row { break }
+		row := exec_dynamic(stmt)
+		defer delete(row)
+		id := row[0].(i64)
+		tag := row[1].(cstring)
+	}
+	rc = finalize(stmt)
 */
 read_row_into_dynamic_array :: proc(
 	stmt: ^Stmt,
-	row: [dynamic]SQLite_Types = nil,
 	allocator := context.temp_allocator,
 	loc := #caller_location,
-) -> [dynamic]SQLite_Types {
+) -> []SQLite_Types {
 	context.allocator = allocator
-	row := row
 	columns := column_count(stmt)
 
-	if row == nil {
-		row = make([dynamic]SQLite_Types, columns, allocator)
-	} else {
-		resize(&row, columns)
-	}
+	row := make([]SQLite_Types, columns)
 
 	for i in 0 ..< columns {
 		type := column_type(stmt, i)
@@ -627,7 +467,7 @@ read_row_into_dynamic_array :: proc(
 		case .Float:
 			row[i] = column_double(stmt, i)
 		case .Text:
-			row[i] = strings.clone_to_cstring(string(column_text(stmt, i)), loc = loc)
+			row[i] = clone((column_text(stmt, i)), loc = loc)
 		case .Blob:
 			len := int(column_bytes(stmt, i))
 			row[i] = mem.byte_slice(column_blob(stmt, i), len)
@@ -641,18 +481,21 @@ read_row_into_dynamic_array :: proc(
 /*
 Writes contents from row into user provided struct.
 
-This procedure doesn't perform allocations, except for string types.
+TBD:
+
+- Binding a any string type does requires allocations.
 
 Example:
 
-stmt, rc := prepare(db, "INSERT INTO tags (tag) VALUES (?) RETURNING *", "mytag")
-for {
-    rc := step(stmt)
-    if rc != .Row { finalize(stmt); break }
-    row :=  exec_struct(db, stmt, struct { id: i64, tag: string })
-    id := row.id
-    tag := row.tag
-}
+	stmt, rc := prepare(db, "INSERT INTO tags (tag) VALUES (?) RETURNING *", "mytag")
+	for {
+		rc := step(stmt)
+		if rc != .Row { break }
+		row := exec_struct(db, stmt, struct { id: i64, tag: string })
+		id := row.id
+		tag := row.tag
+	}
+	finalize(stmt)
 */
 read_row_into_struct :: proc(
 	db: ^SQLite3,
@@ -666,7 +509,7 @@ read_row_into_struct :: proc(
 ) where intrinsics.type_is_struct(T) {
 	rc = .Error
 
-	struct_info := runtime.type_info_base(type_info_of(T)).variant.(runtime.Type_Info_Struct)
+	struct_info := rt.type_info_base(type_info_of(T)).variant.(rt.Type_Info_Struct)
 	if struct_info.soa_kind != .None {
 		log.error("#soa structs not accepted.", location = loc)
 		return
@@ -680,9 +523,9 @@ read_row_into_struct :: proc(
 	for field, field_idx in struct_info.types[:struct_info.field_count] {
 		col_idx := cast(i32)field_idx
 		col_type := column_type(stmt, col_idx)
-		field_base := runtime.type_info_base(field)
+		field_base := rt.type_info_base(field)
 		field_offs := struct_info.offsets[field_idx]
-		if un, ok := field_base.variant.(runtime.Type_Info_Union); ok {
+		if un, ok := field_base.variant.(rt.Type_Info_Union); ok {
 			if !un.no_nil && len(un.variants) != 1 {
 				log.errorf(
 					"Only Maybe(T) is supported as union argument, %v not accepted",
@@ -694,7 +537,7 @@ read_row_into_struct :: proc(
 			field_base = un.variants[0]
 		}
 		#partial switch field_variant in field_base.variant {
-		case runtime.Type_Info_Boolean:
+		case rt.Type_Info_Boolean:
 			if col_type != .Integer {
 				log.errorf(
 					"Type mismatch: %v <- %v",
@@ -722,7 +565,7 @@ read_row_into_struct :: proc(
 				)
 				return
 			}
-		case runtime.Type_Info_Enum:
+		case rt.Type_Info_Enum:
 			if col_type == .Integer {
 				value := column_int64(stmt, col_idx)
 				switch field.size {
@@ -784,7 +627,7 @@ read_row_into_struct :: proc(
 				)
 				return
 			}
-		case runtime.Type_Info_Float:
+		case rt.Type_Info_Float:
 			if col_type != .Float {
 				log.errorf(
 					"Type mismatch: %v <- %v",
@@ -810,7 +653,7 @@ read_row_into_struct :: proc(
 				)
 				return
 			}
-		case runtime.Type_Info_Integer:
+		case rt.Type_Info_Integer:
 			if col_type != .Integer {
 				log.errorf(
 					"Type mismatch: %v <- %v",
@@ -838,7 +681,7 @@ read_row_into_struct :: proc(
 				)
 				return
 			}
-		case runtime.Type_Info_String:
+		case rt.Type_Info_String:
 			if col_type != .Text {
 				log.errorf(
 					"Type mismatch: %v <- %v",
@@ -873,7 +716,7 @@ read_row_into_struct :: proc(
 				}
 			}
 
-		case runtime.Type_Info_Array:
+		case rt.Type_Info_Array:
 			if col_type != .Blob {
 				log.errorf(
 					"Type mismatch: %v <- %v",
@@ -896,4 +739,17 @@ read_row_into_struct :: proc(
 		}
 	}
 	return t, .Ok
+}
+
+@(private)
+clone :: #force_inline proc(
+	s: cstring,
+	allocator := context.allocator,
+	loc := #caller_location,
+) -> (
+	cstring,
+	rt.Allocator_Error,
+) #optional_allocator_error {
+	if s == nil do return nil, .None
+	return strings.clone_to_cstring(string(s))
 }

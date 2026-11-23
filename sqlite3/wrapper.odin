@@ -10,57 +10,65 @@ import "core:reflect"
 /*
 Supports the SQL to be provided as string, cstring, string16 or cstring16.
 */
-prepare :: proc {
-	prepare8,
-	prepare16,
-}
-
-/*
-Prepare a statement using UTF-8 strings.
-*/
-prepare8 :: #force_inline proc(
+prepare :: #force_inline proc(
 	db: ^SQLite3,
 	sql: $T,
 	args: ..any,
 	flags: Prepare_Flags = {},
-	tail: ^cstring = nil,
+	tail: ^T = nil,
 	loc := #caller_location,
 ) -> (
 	stmt: ^Stmt,
 	rc: Result_Code,
 ) where T == cstring ||
-	T == string {
-	when T == string {
-		prepare_v3(db, cstring(raw_data(sql)), cast(i32)len(sql), flags, &stmt, tail) or_return
-	} else {
-		prepare_v3(db, sql, -1, flags, &stmt, tail) or_return
-	}
-	rc = bind(stmt, ..args, loc = loc)
-	return
-}
-
-/*
-Prepare a statement using UTF-16 strings.
-*/
-prepare16 :: #force_inline proc(
-	db: ^SQLite3,
-	sql: $T,
-	args: ..any,
-	flags: Prepare_Flags = {},
-	tail: ^cstring16 = nil,
-	loc := #caller_location,
-) -> (
-	stmt: ^Stmt,
-	rc: Result_Code,
-) where T == string16 ||
+	T == string ||
+	T == string16 ||
 	T == cstring16 {
-	when T == string16 {
-		panic("I think Odin's string16 is broken. All prepare procedures work, but this one")
-		prepare16_v3(db, cstring16(raw_data(sql)), cast(i32)len(sql), flags, &stmt, tail) or_return
-	} else {
-		prepare16_v3(db, sql, -1, flags, &stmt, tail) or_return
+	IS_CSTR :: T == cstring || T == cstring16
+	CSTRING :: cstring when T == string || T == cstring else cstring16
+
+	leftover: CSTRING
+
+	when T == string {
+		prepare_v3(
+			db,
+			cstring(raw_data(sql)),
+			cast(i32)len(sql),
+			flags,
+			&stmt,
+			&leftover,
+		) or_return
+	} else when T == cstring {
+		prepare_v3(db, sql, -1, flags, &stmt, &leftover) or_return
+	} else when T == string16 {
+		prepare16_v3(
+			db,
+			cstring16(raw_data(sql)),
+			// SQLite nByte param needs the length in bytes, not by code units
+			cast(i32)(len(sql)) * size_of(u16),
+			flags,
+			&stmt,
+			&leftover,
+		) or_return
+	} else when T == cstring16 {
+		prepare16_v3(db, sql, -1, flags, &stmt, &leftover) or_return
 	}
 	rc = bind(stmt, ..args, loc = loc)
+
+	if tail == nil do return
+
+	when IS_CSTR {
+		tail^ = leftover
+	} else {
+		raw_sql := sql when IS_CSTR else cast(CSTRING)(raw_data(sql))
+		idx := (int(uintptr(rawptr(leftover)) - uintptr(rawptr(raw_sql))))
+		when T == string16 {
+			// Convert back to code units
+			idx /= size_of(u16)
+		}
+		tail^ = sql[idx:]
+	}
+
 	return
 }
 
