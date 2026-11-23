@@ -8,14 +8,15 @@ These bindings were hand-written and thus can contain many mistakes. In case you
 *Progress:* missing to port SQLite Sessions and FTS5. If you don't need any of these, you can already use it.
 #+END_QUOTE
 
-** Project structure:
-
+#+HTML: <details>
+#+HTML:   <summary>Project structure</summary>
 - ~amalgamation/~: SQLite3's official amalgamation of the source code. Replace the contents of the folder with fresh version of amalgamation to update the version.
 - ~sqlite3/~: Raw bindings of SQLite3, and addons.
 - ~test/~: Test addons.
+#+HTML: </details>
 
-** Convention
-
+#+HTML: <details>
+#+HTML:   <summary>Convention</summary>
 - Declarations happens in the same order as ~sqlite.h~.
 - Declarations persist the original C header comments.
 - Removed all sqlite/SQLITE prefixes.
@@ -23,6 +24,7 @@ These bindings were hand-written and thus can contain many mistakes. In case you
 - Naming conventions follows Odin's.
 - Type names follow the original, or if doesn't exist they are adapted.
 - Procedure names follow the original.
+#+HTML: </details>
 
 ** Using
 
@@ -63,15 +65,17 @@ Importing the library:
 This uses the API provided in [[.sqlite3/wrapper.odin]] and [[./sqlite3/exec.odin]] which isn't part of SQLite3. Otherwise, use the official [[https://sqlite.org/docs.html][SQLite3 documentation]], for more details. Alternatively, the [[./sqlite3/sqlite3.odin]] contains all the original C header comments.
 #+END_QUOTE
 
+All addons provided accepts the schema type to be ~cstring~, ~string~, ~cstring16~ and ~string16~.
+
 *** Open the database:
 
 #+BEGIN_SRC odin
 DB_FILE :: "test/db.sqlite"
 db: ^sqlite3.SQLite3
 defer sqlite3.close(db) // should always be called
-err := sqlite3.open(DB_FILE, &db)
-if err != nil {
-	log.errorf("Unable to open database '%s'(%v): %s", DB_FILE, status, sqlite.errmsg(db))
+rc := sqlite3.open(DB_FILE, &db)
+if rc != nil {
+	log.errorf("Unable to open database '%s'(%v): %s", DB_FILE, rc, sqlite.errmsg(db))
 	return
 }
 // Do things with database
@@ -80,7 +84,7 @@ if err != nil {
 *** Run a simple query to create some tables:
 
 #+BEGIN_SRC odin
-_ = sqlite.exec(db, `
+rc = sqlite.exec(db, `
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY,
         name VARCHAR(64) NOT NULL,
@@ -89,8 +93,10 @@ _ = sqlite.exec(db, `
 )
 #+END_SRC
 
+Insert some users.
+
 #+BEGIN_SRC odin
-_ = sqlite.exec(db, `
+rc = sqlite.exec(db, `
     INSERT INTO users (name, flag) VALUES
         (?, ?),
         (?, ?),
@@ -106,84 +112,87 @@ _ = sqlite.exec(db, `
 Which is equivalent to the following:
 
 #+BEGIN_SRC odin
-query, _ := sqlite.prepare(db, `
-    INSERT INTO users (name, flag) VALUES
-        (?, ?),
-        (?, ?),
-        (?, ?),
-        (?, ?);`,
-    "john", 1,
-    "mary", 0,
-    "alice", 1,
-    "bob", 0)
-_ = sqlite.exec(query)
+  stmt, rc := sqlite.prepare(db, `
+      INSERT INTO users (name, flag) VALUES
+          (?, ?),
+          (?, ?),
+          (?, ?),
+          (?, ?);`,
+      "john", 1,
+      "mary", 0,
+      "alice", 1,
+      "bob", 0)
+  sqlite.exec(stmt)
 
-// When the user creates que stmt manually, they also have to finalize it
-sqlite.finalize(query)
+  // When the user creates que stmt manually, they also have to finalize it
+  rc = sqlite.finalize(stmt)
 #+END_SRC
 
 Reusing the same statement:
 
 #+BEGIN_SRC odin
-query, _ := sqlite.prepare(db, `
-    INSERT INTO users (name, flag) VALUES
-        (?, ?);`,
-    "mary", 0)
-_ = sqlite.exec(query)
+  stmt, rc := sqlite.prepare(db, `
+      INSERT INTO users (name, flag) VALUES
+          (?, ?);`,
+      "mary", 0)
+  sqlite.exec(stmt)
 
-sqlite.reset(query); sqlite.clear_bindings(query);
-bind(query, "alice", 1)
+  sqlite.reset(stmt); sqlite.clear_bindings(stmt);
+  bind(stmt, "alice", 1)
 
-_ = sqlite.exec(query)
+  sqlite.exec(stmt)
 
-sqlite.finalize(query)
+  rc = sqlite.finalize(stmt)
 #+END_SRC
 
 *** Iterate select results:
 
 #+BEGIN_SRC odin
-// Create prepared statement
-query, status := sqlite.prepare(db, `
-    INSERT into users (name, flag) VALUES
-       (?, ?),
-       (?, ?)
-    RETURNING *`, "douglas", 1, "jonathan", 0)
+  // Create prepared statement
+  stmt, rc := sqlite.prepare(db, `
+      INSERT into users (name, flag) VALUES
+         (?, ?),
+         (?, ?)
+      RETURNING *`, "douglas", 1, "jonathan", 0)
 
-// Iterate the results
-for {
-	row, status := sqlite.exec_dynamic(db, query)
-	if status != nil { break }
+  // Iterate the results
+  for {
+	rc = step(stmt)
+	if rc != .Row do break
+	row := sqlite.exec_dynamic(stmt)
 	defer delete(row)
 	fmt.println(row)
-}
-sqlite.finalize(query)
+  }
+  sqlite.finalize(stmt)
 #+END_SRC
 
-Alternatively, the iteration can be performed without allocations.
+Alternatively, the iteration can be performed with structs.
 
 #+BEGIN_SRC odin
-// Create prepared statement
-query, status := sqlite.prepare(db, `
-    INSERT into users (name, flag) VALUES
-       (?, ?),
-       (?, ?)
-    RETURNING *`, "douglas", 1, "jonathan", 0)
+  // Create prepared statement
+  stmt, rc := sqlite.prepare(db, `
+      INSERT into users (name, flag) VALUES
+         (?, ?),
+         (?, ?)
+      RETURNING *`, "douglas", 1, "jonathan", 0)
 
-// Iterate the results
-for {
-	row, status := sqlite.exec_struct(db, query, struct { name: string, flag: bool })
-	if status != nil { break }
+  // Iterate the results
+  for {
+	rc = step(stmt)
+	if rc != .Row do break
+	row: struct{ name: string, flag: bool }
+	row, rc = sqlite.exec_struct(db, stmt, struct { name: string, flag: bool })
 	fmt.println(row)
-}
-sqlite.finalize(query)
+  }
+  sqlite.finalize(stmt)
 #+END_SRC
 
 *** Collect all results
 
 #+BEGIN_SRC odin
-  rows, tail, status := sqlite.exec_dynamic(db, context.allocator, `
+  rows, rc := sqlite.exec_dynamic(db, `
       INSERT into users (name, flag) VALUES
-  (?, ?),
+         (?, ?),
          (?, ?)
       RETURNING *`, "douglas", 1, "jonathan", 0)
   defer {
@@ -197,7 +206,7 @@ sqlite.finalize(query)
 Alternatively with structs:
 
 #+BEGIN_SRC odin
-  rows, tail, status := sqlite.exec_struct(db, context.allocator,
+  rows, status := sqlite.exec_struct(db,
       struct { name: string, flag: bool }, `
       INSERT into users (name, flag) VALUES
          (?, ?),
@@ -209,7 +218,9 @@ Alternatively with structs:
 *** Getting the columns and rows
 
 #+BEGIN_SRC odin
-  cols, vals, tail, rc := sqlite.exec_column(db, context.allocator,
+  dyn_cols: [dynamic]cstring
+  cols, vals, rc := sqlite.exec_column(db,
+      &dyn_cols,
       `INSERT into users (name, flag) VALUES
          (?, ?),
          (?, ?)
@@ -218,19 +229,53 @@ Alternatively with structs:
   	for col in cols {
   		delete(col)
   	}
-          delete(cols)
+  	delete(cols)
   }
 #+END_SRC
 
-*** Execute all statements
+*** Iterating statements
+
+All ~exec_*~ procedures above execute only one statement at a time. If you have a schema like the following, there is an extra step to execute everything.
 
 #+BEGIN_SRC odin
-  rc := sqlite.exec_all(db,
-  	```
-  	INSERT INTO users (name, flag) VALUES ('bob', 1); -- 1
-  	SELECT * from users; -- 2
-  	```, callback, nil,
-  )
+  SCHEMA ::
+  ```
+  INSERT INTO users (name, flag) VALUES ('bob', 1); -- 1
+  SELECT * from users; -- 2
+  ```
 #+END_SRC
 
-# *** Iterating statements
+You can either run everything at once, without arguments as follow:
+
+#+BEGIN_SRC odin
+  rc := sqlite.exec_all(db, SCHEMA)
+  rc := sqlite.exec_all(db, SCHEMA, callback, nil)
+#+END_SRC
+
+Or you can use any of the previous ~exec_*~ procedures, but pass a implicit parameter called ~tail~.
+
+#+BEGIN_SRC odin
+  /* using the tail without exec_* */
+  tail: string = SCHEMA
+  stmt, rc := sqlite.prepare(db, tail, tail = &tail)
+  sqlite.exec(stmt)
+  sqlite.finalize(stmt) // always finalize
+
+  if !sqlite.is_sql_valid(tail) do return
+  stmt, rc = sqlite.prepare(db, tail, tail = &tail)
+  sqlite.exec(stmt)
+  sqlite.finalize(stmt)
+
+  /* using the tail with exec_* */
+  tail: cstring = SCHEMA
+  rc := sqlite.exec(db, tail, tail = &tail)
+
+  if !sqlite.is_sql_valid(tail) do return
+  rc := sqlite.exec(db, tail, tail = &tail)
+
+  /* but likely you are going to do this */
+  tail: string = SCHEMA
+  for rc == .Ok && sqlite.is_sql_valid(tail) {
+  	rc = sqlite.exec(db, tail, tail = &tail)
+  }
+#+END_SRC
