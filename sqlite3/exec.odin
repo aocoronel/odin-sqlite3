@@ -133,21 +133,7 @@ exec16_dynamic_query :: proc(
 	rc: Result_Code,
 ) where Q == string16 ||
 	Q == cstring16 {
-	if _invalid_query(sql) do return
-
-	rows.allocator = allocator
-	stmt: ^Stmt
-
-	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
-	if rc == .Ok {
-		for {
-			if step(stmt) != .Row do break
-			append(&rows, read_row_into_dynamic_array(stmt, nil, allocator, loc))
-		}
-	}
-
-	rc = finalize(stmt)
-	return
+	return _exec_dynamic_query(cstring16, db, sql, ..args, allocator = allocator, loc = loc)
 }
 
 exec8_dynamic_query :: proc(
@@ -162,21 +148,7 @@ exec8_dynamic_query :: proc(
 	rc: Result_Code,
 ) where Q == string ||
 	Q == cstring {
-	if _invalid_query(sql) do return
-
-	rows.allocator = allocator
-	stmt: ^Stmt
-
-	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
-	if rc == .Ok {
-		for {
-			if step(stmt) != .Row do break
-			append(&rows, read_row_into_dynamic_array(stmt, nil, allocator, loc))
-		}
-	}
-
-	rc = finalize(stmt)
-	return
+	return _exec_dynamic_query(cstring, db, sql, ..args, allocator = allocator, loc = loc)
 }
 
 exec16_column_query :: proc(
@@ -192,49 +164,15 @@ exec16_column_query :: proc(
 	rc: Result_Code,
 ) where Q == string16 ||
 	Q == cstring16 {
-	if _invalid_query(sql) do return
-
-	stmt: ^Stmt
-	cols := cols
-
-	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
-	if rc == .Ok {
-		init := true
-		ncols: i32
-		for {
-			rc = step(stmt)
-			if rc != .Row do break
-			if init {
-				ncols = column_count(stmt)
-
-				if cols == nil {
-					cols = make([dynamic]cstring, ncols * 2, allocator)
-				} else {
-					reserve(&cols, int(ncols * 2))
-				}
-
-				for i: i32 = 0; i < ncols; i += 1 {
-					cols[i] = column_name(stmt, i)
-					assert(cols[i] != nil)
-				}
-				init = false
-			}
-			vals := cast([^]cstring)(&cols[ncols])
-			for i: i32 = 0; i < ncols; i += 1 {
-				vals[i] = column_text(stmt, i)
-				if (vals[i] == nil && column_type(stmt, i) != .Null) {
-					rc = set_errmsg(db, .No_Mem, "out of memory")
-					return
-				}
-			}
-			sCols = cols[:ncols]
-			sVals = vals[:ncols]
-		}
-	}
-
-	rc = finalize(stmt)
-
-	return
+	return _exec_column_query(
+		cstring16,
+		db,
+		sql,
+		..args,
+		cols = cols,
+		allocator = allocator,
+		loc = loc,
+	)
 }
 
 exec8_column_query :: proc(
@@ -250,49 +188,15 @@ exec8_column_query :: proc(
 	rc: Result_Code,
 ) where Q == string ||
 	Q == cstring {
-	if _invalid_query(sql) do return
-
-	stmt: ^Stmt
-	cols := cols
-
-	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
-	if rc == .Ok {
-		init := true
-		ncols: i32
-		for {
-			rc = step(stmt)
-			if rc != .Row do break
-			if init {
-				ncols = column_count(stmt)
-
-				if cols == nil {
-					cols = make([dynamic]cstring, ncols * 2, allocator)
-				} else {
-					reserve(&cols, int(ncols * 2))
-				}
-
-				for i: i32 = 0; i < ncols; i += 1 {
-					cols[i] = column_name(stmt, i)
-					assert(cols[i] != nil)
-				}
-				init = false
-			}
-			vals := cast([^]cstring)(&cols[ncols])
-			for i: i32 = 0; i < ncols; i += 1 {
-				vals[i] = column_text(stmt, i)
-				if (vals[i] == nil && column_type(stmt, i) != .Null) {
-					rc = set_errmsg(db, .No_Mem, "out of memory")
-					return
-				}
-			}
-			sCols = cols[:ncols]
-			sVals = vals[:ncols]
-		}
-	}
-
-	rc = finalize(stmt)
-
-	return
+	return _exec_column_query(
+		cstring,
+		db,
+		sql,
+		..args,
+		cols = cols,
+		allocator = allocator,
+		loc = loc,
+	)
 }
 
 exec16_struct_query :: proc(
@@ -308,21 +212,7 @@ exec16_struct_query :: proc(
 	rc: Result_Code,
 ) where Q == string16 ||
 	Q == cstring16 {
-	if _invalid_query(sql) do return
-
-	rows.allocator = allocator
-	stmt: ^Stmt
-
-	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
-	if rc == .Ok {
-		for {
-			if step(stmt) != .Row do break
-			append(&rows, read_row_into_struct(db, stmt, T, allocator, loc = loc) or_return)
-		}
-	}
-
-	rc = finalize(stmt)
-	return
+	return _exec_struct_query(cstring16, db, sql, T, ..args, allocator = allocator, loc = loc)
 }
 
 exec8_struct_query :: proc(
@@ -338,42 +228,33 @@ exec8_struct_query :: proc(
 	rc: Result_Code,
 ) where Q == string ||
 	Q == cstring {
-	if _invalid_query(sql) do return
-
-	rows.allocator = allocator
-	stmt: ^Stmt
-
-	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
-	if rc == .Ok {
-		for {
-			if step(stmt) != .Row do break
-			append(&rows, read_row_into_struct(db, stmt, T, allocator, loc = loc) or_return)
-		}
-	}
-
-	rc = finalize(stmt)
-	return
+	return _exec_struct_query(cstring, db, sql, T, ..args, allocator = allocator, loc = loc)
 }
 
-/*
-Does nothing with rows.
+exec16_ignore_query :: proc(
+	db: ^SQLite3,
+	sql: $T,
+	args: ..any,
+	loc := #caller_location,
+) -> (
+	tail: cstring16,
+	rc: Result_Code,
+) where T == string16 ||
+	T == cstring16 {
+	return _exec_ignore_query(cstring16, db, sql, ..args, loc = loc)
+}
 
-Only executes one statement.
-
-Example:
-
-  stmt, rc := prepare(db, "INSERT INTO tags (tag) VALUES (?)", "mytag")
-  rc = exec(stmt)
-  if rc != .Ok { log.error(errmsg(db)) }
-  finalize(stmt)
-*/
-exec_ignore :: proc(stmt: ^Stmt) -> (rc: Result_Code) {
-	for {
-		rc = step(stmt)
-		if rc != .Row {
-			return .Ok if rc == .Done else rc
-		}
-	}
+exec8_ignore_query :: proc(
+	db: ^SQLite3,
+	sql: $T,
+	args: ..any,
+	loc := #caller_location,
+) -> (
+	tail: cstring,
+	rc: Result_Code,
+) where T == string ||
+	T == cstring {
+	return _exec_ignore_query(cstring, db, sql, ..args, loc = loc)
 }
 
 // WIP: early exit if query is empty
@@ -397,23 +278,50 @@ _invalid_query :: #force_inline proc "contextless" (
 	return true
 }
 
-exec16_ignore_query :: proc(
+/*
+Does nothing with rows.
+
+Only executes one statement.
+
+Example:
+
+  stmt, rc := prepare(db, "INSERT INTO tags (tag) VALUES (?)", "mytag")
+  rc = exec(stmt)
+  if rc != .Ok { log.error(errmsg(db)) }
+  finalize(stmt)
+*/
+exec_ignore :: proc(stmt: ^Stmt) -> (rc: Result_Code) {
+	for {
+		rc = step(stmt)
+		if rc != .Row {
+			return .Ok if rc == .Done else rc
+		}
+	}
+}
+
+_exec_dynamic_query :: #force_inline proc(
+	$TAIL_TYPE: typeid,
 	db: ^SQLite3,
-	sql: $T,
+	sql: $Q,
 	args: ..any,
+	allocator := context.temp_allocator,
 	loc := #caller_location,
 ) -> (
-	tail: cstring16,
+	rows: [dynamic][dynamic]SQLite_Types,
+	tail: TAIL_TYPE,
 	rc: Result_Code,
-) where T == string16 ||
-	T == cstring16 {
+) where (TAIL_TYPE == cstring && Q == string || Q == cstring) ||
+	(TAIL_TYPE == cstring16 && Q == string16 || Q == cstring16) {
 	if _invalid_query(sql) do return
+
+	rows.allocator = allocator
 	stmt: ^Stmt
 
 	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
 	if rc == .Ok {
 		for {
 			if step(stmt) != .Row do break
+			append(&rows, read_row_into_dynamic_array(stmt, nil, allocator, loc))
 		}
 	}
 
@@ -421,16 +329,107 @@ exec16_ignore_query :: proc(
 	return
 }
 
-exec8_ignore_query :: proc(
+_exec_column_query :: #force_inline proc(
+	$TAIL_TYPE: typeid,
 	db: ^SQLite3,
-	sql: $T,
+	sql: $Q,
+	args: ..any,
+	cols: [dynamic]cstring = nil,
+	allocator := context.temp_allocator,
+	loc := #caller_location,
+) -> (
+	sCols, sVals: []cstring,
+	tail: TAIL_TYPE,
+	rc: Result_Code,
+) where (TAIL_TYPE == cstring && Q == string || Q == cstring) ||
+	(TAIL_TYPE == cstring16 && Q == string16 || Q == cstring16) {
+	if _invalid_query(sql) do return
+
+	stmt: ^Stmt
+	cols := cols
+
+	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
+	if rc == .Ok {
+		init := true
+		ncols: i32
+		for {
+			rc = step(stmt)
+			if rc != .Row do break
+			if init {
+				ncols = column_count(stmt)
+
+				if cols == nil {
+					cols = make([dynamic]cstring, ncols * 2, allocator)
+				} else {
+					reserve(&cols, int(ncols * 2))
+				}
+
+				for i: i32 = 0; i < ncols; i += 1 {
+					cols[i] = column_name(stmt, i)
+					assert(cols[i] != nil)
+				}
+				init = false
+			}
+			vals := cast([^]cstring)(&cols[ncols])
+			for i: i32 = 0; i < ncols; i += 1 {
+				vals[i] = column_text(stmt, i)
+				if (vals[i] == nil && column_type(stmt, i) != .Null) {
+					rc = set_errmsg(db, .No_Mem, "out of memory")
+					return
+				}
+			}
+			sCols = cols[:ncols]
+			sVals = vals[:ncols]
+		}
+	}
+
+	rc = finalize(stmt)
+
+	return
+}
+
+_exec_struct_query :: #force_inline proc(
+	$TAIL_TYPE: typeid,
+	db: ^SQLite3,
+	sql: $Q,
+	$T: typeid,
+	args: ..any,
+	allocator := context.temp_allocator,
+	loc := #caller_location,
+) -> (
+	rows: [dynamic]T,
+	tail: TAIL_TYPE,
+	rc: Result_Code,
+) where (TAIL_TYPE == cstring && Q == string || Q == cstring) ||
+	(TAIL_TYPE == cstring16 && Q == string16 || Q == cstring16) {
+	if _invalid_query(sql) do return
+
+	rows.allocator = allocator
+	stmt: ^Stmt
+
+	stmt, rc = prepare(db, sql, ..args, tail = &tail, loc = loc)
+	if rc == .Ok {
+		for {
+			if step(stmt) != .Row do break
+			append(&rows, read_row_into_struct(db, stmt, T, allocator, loc = loc) or_return)
+		}
+	}
+
+	rc = finalize(stmt)
+	return
+}
+
+_exec_ignore_query :: proc(
+	$TAIL_TYPE: typeid,
+	db: ^SQLite3,
+	sql: $Q,
 	args: ..any,
 	loc := #caller_location,
 ) -> (
-	tail: cstring,
+	tail: TAIL_TYPE,
 	rc: Result_Code,
-) where T == string ||
-	T == cstring {
+) where (TAIL_TYPE == cstring && Q == string || Q == cstring) ||
+	(TAIL_TYPE == cstring16 && Q == string16 || Q == cstring16) {
 	if _invalid_query(sql) do return
 	stmt: ^Stmt
 
