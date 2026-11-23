@@ -42,14 +42,6 @@ exec :: proc(t: ^testing.T) {
 		// 	assert(false, "failed to prepare statement")} else { sqlite.finalize(stmt) }
 	}
 
-	// Test exec_ignore
-	{
-		stmt, rc := sqlite.prepare(db, string(ADD_USER), "bob")
-		if rc != .Ok { assert(false, "failed to prepare statement") }
-		assert(sqlite.exec(stmt) == .Ok)
-		sqlite.finalize(stmt)
-	}
-
 	// Test exec_ignore_query
 	if _, rc := sqlite.exec(db, string(ADD_USER), "bob");
 	   rc != .Ok { assert(false, "failed to add 'bob'") }

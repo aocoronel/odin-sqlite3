@@ -111,7 +111,6 @@ rc := exec(db, "INSERT INTO tags (tag) VALUES (?)", "mytag")
 if rc != .Ok { log.error(errmsg(db)) }
 */
 exec :: proc {
-	exec_ignore,
 	exec8_ignore_query,
 	exec16_ignore_query,
 }
@@ -278,27 +277,6 @@ _invalid_query :: #force_inline proc "contextless" (
 	return true
 }
 
-/*
-Does nothing with rows.
-
-Only executes one statement.
-
-Example:
-
-  stmt, rc := prepare(db, "INSERT INTO tags (tag) VALUES (?)", "mytag")
-  rc = exec(stmt)
-  if rc != .Ok { log.error(errmsg(db)) }
-  finalize(stmt)
-*/
-exec_ignore :: proc(stmt: ^Stmt) -> (rc: Result_Code) {
-	for {
-		rc = step(stmt)
-		if rc != .Row {
-			return .Ok if rc == .Done else rc
-		}
-	}
-}
-
 _exec_dynamic_query :: #force_inline proc(
 	$TAIL_TYPE: typeid,
 	db: ^SQLite3,
@@ -419,7 +397,7 @@ _exec_struct_query :: #force_inline proc(
 	return
 }
 
-_exec_ignore_query :: proc(
+_exec_ignore_query :: #force_inline proc(
 	$TAIL_TYPE: typeid,
 	db: ^SQLite3,
 	sql: $Q,
