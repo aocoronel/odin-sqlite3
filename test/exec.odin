@@ -49,9 +49,9 @@ exec :: proc(t: ^testing.T) {
 	   rc != .Ok { assert(false, "failed to add 'bob'") }
 
 	// Test exec_struct
-	if _, rc := sqlite.exec_struct(db, string(ADD_USER), struct {}, "bob");
+	if _, rc := sqlite.exec_struct(db, struct {}, string(ADD_USER), "bob");
 	   rc != .Ok { assert(false, "failed to add 'bob'") }
-	if _, rc := sqlite.exec_struct(db, cstring16(ADD_USER), struct {}, "bob");
+	if _, rc := sqlite.exec_struct(db, struct {}, cstring16(ADD_USER), "bob");
 	   rc != .Ok { assert(false, "failed to add 'bob'") }
 
 	// Test exec_dynamic
@@ -64,9 +64,9 @@ exec :: proc(t: ^testing.T) {
 
 	// Test exec_column
 	dyn_cols: [dynamic]cstring
-	if cols, vals, rc := sqlite.exec_column(db, SELECT_QUERY, &dyn_cols);
+	if cols, vals, rc := sqlite.exec_column(db, &dyn_cols, SELECT_QUERY);
 	   rc != .Ok { assert(false, "failed to add 'bob'") }
-	if cols, vals, rc := sqlite.exec_column(db, cstring16(SELECT_QUERY), &dyn_cols);
+	if cols, vals, rc := sqlite.exec_column(db, &dyn_cols, cstring16(SELECT_QUERY));
 	   rc != .Ok { assert(false, "failed to add 'bob'") }
 
 	// Test read_row_into_column_array

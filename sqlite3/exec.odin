@@ -35,8 +35,8 @@ Only executes one statement.
 Example:
 
 	rows, rc := exec_struct(db,
-		"INSERT INTO tags (tag) VALUES (?) RETURNING *", "mytag",
-		struct { id: i64, tag: string }
+		struct { id: i64, tag: string },
+		"INSERT INTO tags (tag) VALUES (?) RETURNING *", "mytag"
 	)
 	defer delete(rows)
 	if rc != .Ok { log.error(errmsg(db)) }
@@ -81,7 +81,7 @@ Example:
 
 	dyn_cols: [dynamic]cstring
 	cols, vals, rc := exec_dynamic(
-		db, "INSERT INTO tags (tag) VALUES (?) RETURNING *", &dyn_cols,
+		db, &dyn_cols, "INSERT INTO tags (tag) VALUES (?) RETURNING *",
 		"mytag",
 	)
 	defer {
@@ -122,7 +122,7 @@ exec_all :: proc {
 Checks if the tail received from prepare() is valid, and can
 be used to prepare another statement.
 */
-is_stmt_valid :: #force_inline proc "contextless" (
+is_sql_valid :: #force_inline proc "contextless" (
 	sql: $T,
 ) -> bool where T == string16 ||
 	T == cstring16 ||
@@ -170,8 +170,8 @@ exec_dynamic_query :: proc(
 
 exec_column_query :: proc(
 	db: ^SQLite3,
-	sql: $T,
 	cols: ^[dynamic]cstring,
+	sql: $T,
 	args: ..any,
 	tail: ^T = nil,
 	allocator := context.temp_allocator,
@@ -225,8 +225,8 @@ exec_column_query :: proc(
 
 exec_struct_query :: proc(
 	db: ^SQLite3,
-	sql: $T,
 	$S: typeid,
+	sql: $T,
 	args: ..any,
 	tail: ^T = nil,
 	allocator := context.temp_allocator,
@@ -300,7 +300,7 @@ exec_all_no_callback :: proc(
 	leftover: T = sql
 	stmt: ^Stmt
 	loop: for rc == .Ok {
-		if !is_stmt_valid(leftover) do break
+		if !is_sql_valid(leftover) do break
 
 		stmt, rc = prepare(db, leftover, tail = &leftover)
 		if rc != .Ok do break
@@ -332,7 +332,7 @@ exec_all_callback :: proc(
 
 	cols := make([dynamic]cstring, context.temp_allocator)
 	for rc == .Ok {
-		if !is_stmt_valid(leftover) do break
+		if !is_sql_valid(leftover) do break
 
 		stmt, rc = prepare(db, leftover, tail = &leftover)
 		if rc != .Ok { rc = finalize(stmt); return }
