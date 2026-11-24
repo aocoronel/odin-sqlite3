@@ -116,6 +116,7 @@ exec :: proc(t: ^testing.T) {
 	assert(sqlite.exec_all(db, LARGE_QUERY) == .Ok)
 	assert(sqlite.exec_all(db, LARGE_QUERY, callback, &once) == .Ok)
 	assert(sqlite.exec_all(db, LARGE_QUERY, callback_abort, nil) == .Abort)
+	assert(sqlite.errmsg(db) == "callback aborted")
 }
 
 callback :: proc(arg: rawptr, ncol: i32, vals, cols: []cstring) -> bool {

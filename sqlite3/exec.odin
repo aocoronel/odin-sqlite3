@@ -245,7 +245,9 @@ exec_struct_query :: proc(
 	if rc == .Ok {
 		for {
 			if step(stmt) != .Row do break
-			append(&rows, read_row_into_struct(db, stmt, S, allocator, loc = loc) or_return)
+			row, ok := read_row_into_struct(db, stmt, S, allocator, loc = loc)
+			if !ok do return nil, .Error
+			append(&rows, row)
 		}
 	}
 
@@ -310,9 +312,11 @@ exec_all_no_callback :: proc(
 		}
 
 		rc = finalize(stmt)
+		stmt = nil
 	}
-
-	rc = finalize(stmt)
+	if stmt != nil {
+		rc = finalize(stmt)
+	}
 	return
 }
 
@@ -489,6 +493,10 @@ read_row_into_dynamic_array :: proc(
 /*
 Writes contents from row into user provided struct.
 
+Errors are printed using log.error. All errors are due to wrong API usage.
+Thus, in a correct program the error codepath will never execute.
+There's no need to set the error message to the database.
+
 TBD:
 
 - Binding a any string type does requires allocations.
@@ -513,10 +521,8 @@ read_row_into_struct :: proc(
 	loc := #caller_location,
 ) -> (
 	t: T,
-	rc: Result_Code,
+	ok: bool,
 ) where intrinsics.type_is_struct(T) {
-	rc = .Error
-
 	struct_info := rt.type_info_base(type_info_of(T)).variant.(rt.Type_Info_Struct)
 	if struct_info.soa_kind != .None {
 		log.error("#soa structs not accepted.", location = loc)
@@ -746,7 +752,7 @@ read_row_into_struct :: proc(
 			return
 		}
 	}
-	return t, .Ok
+	return t, true
 }
 
 @(private)
