@@ -77,7 +77,8 @@ RTTI-based bindings.
 */
 bind :: proc(stmt: ^Stmt, args: ..any, loc := #caller_location) -> (rc: Result_Code) {
 	UNSUPPORTED_BINDING :: "Unsupported bind type: %v. Supports only integers, floats, booleans, strings, nil, Maybe(T) and [N]u8."
-	for arg, arg_idx in args {
+	for _arg, arg_idx in args {
+		arg := _arg
 		arg_idx := cast(i32)arg_idx + 1
 		arg_info := runtime.type_info_base(type_info_of(arg.id))
 		if arg == nil {
@@ -98,6 +99,7 @@ bind :: proc(stmt: ^Stmt, args: ..any, loc := #caller_location) -> (rc: Result_C
 				return .Error
 			}
 			arg_info = arg_variant.variants[0]
+			arg = any{_arg.data, arg_info.id}
 		}
 		rc = Result_Code.Ok
 		#partial switch arg_variant in arg_info.variant {
