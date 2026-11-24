@@ -299,14 +299,14 @@ exec_all_no_callback :: proc(
 	T == cstring16 {
 	leftover: T = sql
 	stmt: ^Stmt
-	loop: for rc == .Ok {
+	for rc == .Ok {
 		if !is_sql_valid(leftover) do break
 
 		stmt, rc = prepare(db, leftover, tail = &leftover)
 		if rc != .Ok do break
 
 		for {
-			if step(stmt) != .Row do break loop
+			if step(stmt) != .Row do break
 		}
 
 		rc = finalize(stmt)
